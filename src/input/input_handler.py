@@ -138,11 +138,17 @@ class InputHandler:
                 if action in ("rotate_cw", "rotate_ccw", "rotate_180", "hard_drop", "hold"):
                     self._buffer.buffer(action)
                 
-                # Start DAS for movement
+                # Handle movement with immediate first move
                 if action == "move_left":
                     self._das.start(-1)
+                    # Trigger immediate move on first press
+                    if "move_left" in self._actions:
+                        self._actions["move_left"]()
                 elif action == "move_right":
                     self._das.start(1)
+                    # Trigger immediate move on first press
+                    if "move_right" in self._actions:
+                        self._actions["move_right"]()
         
         elif event.type == pygame.KEYUP:
             self._keys_released.add(event.key)

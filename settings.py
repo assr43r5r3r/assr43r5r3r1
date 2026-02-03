@@ -4,10 +4,10 @@ All timing values, dimensions, and gameplay constants are defined here.
 """
 
 # Display settings
-WINDOW_WIDTH = 1280
-WINDOW_HEIGHT = 720
+WINDOW_WIDTH = 900
+WINDOW_HEIGHT = 700
 FPS = 60
-WINDOW_TITLE = "Modern Tetris"
+WINDOW_TITLE = "Tetris"
 
 # Grid settings
 GRID_WIDTH = 10

@@ -54,7 +54,7 @@ from src.tetris.game import TetrisGame, GameStatus
 from src.input.input_handler import InputHandler, InputConfig
 from src.render.renderer import Renderer
 from src.audio.audio_manager import AudioManager, create_placeholder_sounds
-from src.ui.menu import MainMenu, PauseMenu, GameOverMenu
+from src.ui.menu import MainMenu, PauseMenu, GameOverMenu, SettingsMenu
 from src.util.events import EventBus, GameEvent
 
 
@@ -106,10 +106,23 @@ class TetrisApp:
             soft_drop_rate=SOFT_DROP_RATE
         ))
         
+        # Current palette
+        self._current_palette = DEFAULT_PALETTE
+        
         # Initialize menus
         self._main_menu = MainMenu(self._screen)
         self._pause_menu = PauseMenu(self._screen)
         self._game_over_menu = GameOverMenu(self._screen)
+        self._settings_menu = SettingsMenu(self._screen)
+        
+        # Set up menu sound callbacks
+        self._main_menu.set_sound_callback(self._audio.play_sound)
+        self._pause_menu.set_sound_callback(self._audio.play_sound)
+        self._game_over_menu.set_sound_callback(self._audio.play_sound)
+        self._settings_menu.set_sound_callback(self._audio.play_sound)
+        
+        # Track where settings was opened from
+        self._settings_return_state = GameState.MENU
         
         # Set up menu callbacks
         self._setup_menus()
@@ -118,6 +131,7 @@ class TetrisApp:
         self._game: Optional[TetrisGame] = None
         self._state = GameState.MENU
         self._running = True
+        self._in_settings = False
         
         # Event bus
         self._events = EventBus()
@@ -128,7 +142,7 @@ class TetrisApp:
         # Main menu
         self._main_menu.set_callbacks(
             on_start=self._start_game,
-            on_settings=self._open_settings,
+            on_settings=self._open_settings_from_menu,
             on_quit=self._quit
         )
         
@@ -136,6 +150,7 @@ class TetrisApp:
         self._pause_menu.set_callbacks(
             on_resume=self._resume_game,
             on_restart=self._restart_game,
+            on_settings=self._open_settings_from_pause,
             on_quit=self._quit_to_menu
         )
         
@@ -143,6 +158,18 @@ class TetrisApp:
         self._game_over_menu.set_callbacks(
             on_restart=self._restart_game,
             on_quit=self._quit_to_menu
+        )
+        
+        # Settings menu
+        self._settings_menu.set_callbacks(
+            on_back=self._close_settings,
+            on_volume_change=self._on_volume_change,
+            on_palette_change=self._on_palette_change
+        )
+        
+        # Initialize settings values
+        self._settings_menu.set_values(
+            MASTER_VOLUME, SFX_VOLUME, MUSIC_VOLUME, self._current_palette
         )
     
     def _setup_events(self) -> None:
@@ -225,10 +252,42 @@ class TetrisApp:
         self._state = GameState.MENU
         self._input.reset()
     
+    def _open_settings_from_menu(self) -> None:
+        """Open settings from main menu."""
+        self._settings_return_state = GameState.MENU
+        self._open_settings()
+    
+    def _open_settings_from_pause(self) -> None:
+        """Open settings from pause menu."""
+        self._settings_return_state = GameState.PAUSED
+        self._open_settings()
+    
     def _open_settings(self) -> None:
-        """Open settings menu."""
-        # Settings menu not yet implemented
-        pass
+        """Open settings menu using _in_settings flag overlay."""
+        self._in_settings = True
+        self._audio.play_sound("menu_select")
+    
+    def _close_settings(self) -> None:
+        """Close settings and return to previous state."""
+        self._in_settings = False
+        self._state = self._settings_return_state
+        self._audio.play_sound("menu_select")
+    
+    def _on_volume_change(self, volume_type: str, value: float) -> None:
+        """Handle volume change from settings."""
+        if volume_type == "master":
+            self._audio.set_master_volume(value)
+        elif volume_type == "sfx":
+            self._audio.set_sfx_volume(value)
+        elif volume_type == "music":
+            self._audio.set_music_volume(value)
+    
+    def _on_palette_change(self, palette: str) -> None:
+        """Handle palette change from settings."""
+        self._current_palette = palette
+        if palette in PALETTES:
+            self._renderer.set_palette(PALETTES[palette])
+            self._audio.play_sound("menu_select")
     
     def _quit(self) -> None:
         """Quit the application."""
@@ -289,6 +348,11 @@ class TetrisApp:
             self._running = False
             return
         
+        # Handle settings menu first if open
+        if self._in_settings:
+            self._settings_menu.handle_event(event)
+            return
+        
         if self._state == GameState.MENU:
             self._main_menu.handle_event(event)
         
@@ -310,6 +374,11 @@ class TetrisApp:
     
     def _update(self, dt: float) -> None:
         """Update game logic."""
+        # Update settings menu if open
+        if self._in_settings:
+            self._settings_menu.update(dt)
+            return
+        
         if self._state == GameState.PLAYING and self._game:
             # Update input
             self._input.update()
@@ -335,6 +404,20 @@ class TetrisApp:
     
     def _render(self) -> None:
         """Render the game."""
+        # Render settings if open
+        if self._in_settings:
+            # Draw background based on return state
+            if self._settings_return_state == GameState.PAUSED and self._game:
+                self._renderer.render(self._game)
+                # Darken
+                overlay = pygame.Surface((self._screen.get_width(), self._screen.get_height()), pygame.SRCALPHA)
+                overlay.fill((10, 10, 20, 200))
+                self._screen.blit(overlay, (0, 0))
+            else:
+                pass  # Settings menu draws its own background
+            self._settings_menu.draw()
+            return
+        
         if self._state == GameState.MENU:
             self._main_menu.draw()
         
