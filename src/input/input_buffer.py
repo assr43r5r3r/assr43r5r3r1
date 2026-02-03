@@ -2,7 +2,7 @@
 Input buffering for responsive controls.
 """
 
-from typing import Set, Optional
+from typing import Set, Optional, Dict
 from dataclasses import dataclass, field
 from enum import Enum, auto
 
@@ -48,7 +48,7 @@ class InputBuffer:
             buffer_frames: Number of frames to buffer inputs
         """
         self._buffer_frames = buffer_frames or self.DEFAULT_BUFFER_FRAMES
-        self._buffered_inputs: dict[str, BufferedInput] = {}
+        self._buffered_inputs: Dict[str, BufferedInput] = {}
         self._consumed: Set[str] = set()
     
     def buffer(self, action: str) -> None:

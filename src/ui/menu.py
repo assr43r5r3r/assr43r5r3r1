@@ -2,7 +2,7 @@
 Menu system for the game.
 """
 
-from typing import List, Callable, Optional, Tuple
+from typing import List, Callable, Optional, Tuple, Any
 from dataclasses import dataclass, field
 from enum import Enum, auto
 
@@ -18,7 +18,7 @@ class MenuItem:
     text: str
     action: Optional[Callable] = None
     enabled: bool = True
-    data: any = None
+    data: Any = None
 
 
 class MenuState(Enum):
@@ -109,7 +109,7 @@ class Menu:
             self._selected_index = (self._selected_index + 1) % len(self._items)
             attempts += 1
     
-    def select(self) -> Optional[any]:
+    def select(self) -> Optional[Any]:
         """
         Select current item.
         
