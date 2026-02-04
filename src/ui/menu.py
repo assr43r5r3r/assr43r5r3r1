@@ -472,80 +472,612 @@ class Menu:
 
 
 class MainMenu(Menu):
-    """Main menu with Play options, Leaderboard, Add Player, Settings, Quit."""
+    """
+    Manga-style Main menu with Play hover options, Players panel, How To Play box.
+    
+    Layout:
+    - Left: Players panel (current player, switch player)
+    - Center: Play, Options, Exit buttons (Play shows submenu on hover)
+    - Right: How To Play box with visual controls
+    - Bottom: Tooltips appear on hover
+    """
     
     def __init__(self, screen: pygame.Surface):
-        super().__init__(screen, "TETRIS")
+        super().__init__(screen, "")  # No title, we'll draw custom
         
         self._on_regular_mode: Optional[Callable] = None
         self._on_story_mode: Optional[Callable] = None
-        self._on_leaderboard: Optional[Callable] = None
-        self._on_add_player: Optional[Callable] = None
-        self._on_settings: Optional[Callable] = None
+        self._on_options: Optional[Callable] = None
         self._on_quit: Optional[Callable] = None
+        self._on_switch_player: Optional[Callable] = None
+        
+        # Custom state for manga-style menu
+        self._play_hovered = False
+        self._play_submenu_visible = False
+        self._submenu_anim = 0.0
+        self._submenu_selected = 0  # 0=Regular, 1=Story
+        
+        # Tooltip state
+        self._tooltip_text = ""
+        self._tooltip_visible = False
+        self._tooltip_anim = 0.0
+        
+        # Player info (set externally)
+        self._current_player_name = ""
+        self._current_player_avatar = None
+        self._players_list = []  # List of (name, avatar) tuples
+        
+        # Button positions (calculated in draw)
+        self._play_btn_rect = pygame.Rect(0, 0, 0, 0)
+        self._options_btn_rect = pygame.Rect(0, 0, 0, 0)
+        self._exit_btn_rect = pygame.Rect(0, 0, 0, 0)
+        self._regular_btn_rect = pygame.Rect(0, 0, 0, 0)
+        self._story_btn_rect = pygame.Rect(0, 0, 0, 0)
+        self._switch_player_rect = pygame.Rect(0, 0, 0, 0)
+        
+        # Decorative elements
+        self._sparkles = []
+        self._init_sparkles()
+        
+        # Tooltip definitions
+        self._tooltips = {
+            "play": "Choose your game mode!\nRegular for classic gameplay,\nStory for an epic adventure!",
+            "options": "Customize your experience!\nChange themes, volume, and more.",
+            "exit": "Exit the game.\nYour progress is automatically saved!",
+            "regular": "Classic Tetris gameplay.\nClear lines, advance stages,\nand aim for high scores!",
+            "story": "Coming Soon!\nEmbark on an epic puzzle\nadventure with unique characters.",
+        }
         
         self._build_menu()
     
+    def _init_sparkles(self) -> None:
+        """Initialize decorative sparkle particles."""
+        import random
+        for i in range(20):
+            self._sparkles.append({
+                'x': random.randint(0, self._screen.get_width()),
+                'y': random.randint(0, self._screen.get_height()),
+                'size': random.uniform(2, 6),
+                'speed': random.uniform(20, 60),
+                'phase': random.uniform(0, 6.28),
+                'alpha': random.randint(50, 150),
+            })
+    
     def _build_menu(self) -> None:
-        """Build menu items."""
-        self._items = [
-            MenuItem("REGULAR MODE", self._start_regular),
-            MenuItem("STORY MODE", self._start_story),
-            MenuItem("LEADERBOARD", self._show_leaderboard),
-            MenuItem("ADD PLAYER", self._add_player),
-            MenuItem("SETTINGS", self._open_settings),
-            MenuItem("QUIT", self._quit_game),
-        ]
-        for i in range(len(self._items)):
-            self._hover_animations[i] = 0.0
+        """Build menu items - simplified for new layout."""
+        self._items = []  # We handle buttons manually now
     
-    def _start_regular(self) -> None:
-        if self._on_regular_mode:
-            self._on_regular_mode()
-    
-    def _start_story(self) -> None:
-        if self._on_story_mode:
-            self._on_story_mode()
-    
-    def _show_leaderboard(self) -> None:
-        if self._on_leaderboard:
-            self._on_leaderboard()
-    
-    def _add_player(self) -> None:
-        if self._on_add_player:
-            self._on_add_player()
-    
-    def _open_settings(self) -> None:
-        if self._on_settings:
-            self._on_settings()
-    
-    def _quit_game(self) -> None:
-        if self._on_quit:
-            self._on_quit()
+    def set_player_info(self, name: str, avatar=None, players_list=None) -> None:
+        """Set current player info and list of all players."""
+        self._current_player_name = name
+        self._current_player_avatar = avatar
+        if players_list:
+            self._players_list = players_list
     
     def set_callbacks(
         self,
         on_regular: Callable = None,
         on_story: Callable = None,
-        on_leaderboard: Callable = None,
-        on_add_player: Callable = None,
+        on_leaderboard: Callable = None,  # Now in options
+        on_add_player: Callable = None,   # Now in options
         on_settings: Callable = None,
-        on_quit: Callable = None
+        on_quit: Callable = None,
+        on_switch_player: Callable = None
     ) -> None:
         """Set menu callbacks."""
         self._on_regular_mode = on_regular
         self._on_story_mode = on_story
-        self._on_leaderboard = on_leaderboard
-        self._on_add_player = on_add_player
-        self._on_settings = on_settings
+        self._on_options = on_settings  # Options leads to settings
         self._on_quit = on_quit
+        self._on_switch_player = on_switch_player
+    
+    def handle_event(self, event: pygame.event.Event) -> bool:
+        """Handle input events."""
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                if self._play_submenu_visible:
+                    self._play_submenu_visible = False
+                    self._play("menu_move")
+                    return True
+            elif event.key in (pygame.K_UP, pygame.K_DOWN):
+                if self._play_submenu_visible:
+                    self._submenu_selected = 1 - self._submenu_selected
+                    self._play("menu_move")
+                    return True
+            elif event.key in (pygame.K_RETURN, pygame.K_SPACE):
+                if self._play_submenu_visible:
+                    if self._submenu_selected == 0:
+                        self._play("menu_select")
+                        if self._on_regular_mode:
+                            self._on_regular_mode()
+                    else:
+                        self._play("menu_select")
+                        if self._on_story_mode:
+                            self._on_story_mode()
+                    return True
+        
+        elif event.type == pygame.MOUSEMOTION:
+            pos = event.pos
+            
+            # Check button hovers and update tooltip
+            old_tooltip = self._tooltip_text
+            self._tooltip_text = ""
+            self._tooltip_visible = False
+            
+            if self._play_btn_rect.collidepoint(pos):
+                self._play_hovered = True
+                self._play_submenu_visible = True
+                self._tooltip_text = self._tooltips["play"]
+                self._tooltip_visible = True
+            else:
+                if not self._regular_btn_rect.collidepoint(pos) and not self._story_btn_rect.collidepoint(pos):
+                    self._play_hovered = False
+                    # Keep submenu visible briefly when moving between buttons
+                    if not self._play_submenu_visible:
+                        pass  # Already hidden
+            
+            if self._options_btn_rect.collidepoint(pos):
+                self._tooltip_text = self._tooltips["options"]
+                self._tooltip_visible = True
+            
+            if self._exit_btn_rect.collidepoint(pos):
+                self._tooltip_text = self._tooltips["exit"]
+                self._tooltip_visible = True
+            
+            if self._regular_btn_rect.collidepoint(pos) and self._play_submenu_visible:
+                self._submenu_selected = 0
+                self._tooltip_text = self._tooltips["regular"]
+                self._tooltip_visible = True
+            
+            if self._story_btn_rect.collidepoint(pos) and self._play_submenu_visible:
+                self._submenu_selected = 1
+                self._tooltip_text = self._tooltips["story"]
+                self._tooltip_visible = True
+            
+            if old_tooltip != self._tooltip_text and self._tooltip_text:
+                self._play("menu_move")
+            
+            return True
+        
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            if event.button == 1:
+                pos = event.pos
+                
+                if self._regular_btn_rect.collidepoint(pos) and self._play_submenu_visible:
+                    self._play("menu_select")
+                    if self._on_regular_mode:
+                        self._on_regular_mode()
+                    return True
+                
+                if self._story_btn_rect.collidepoint(pos) and self._play_submenu_visible:
+                    self._play("menu_select")
+                    if self._on_story_mode:
+                        self._on_story_mode()
+                    return True
+                
+                if self._play_btn_rect.collidepoint(pos):
+                    self._play_submenu_visible = not self._play_submenu_visible
+                    self._play("menu_select")
+                    return True
+                
+                if self._options_btn_rect.collidepoint(pos):
+                    self._play("menu_select")
+                    if self._on_options:
+                        self._on_options()
+                    return True
+                
+                if self._exit_btn_rect.collidepoint(pos):
+                    self._play("menu_select")
+                    if self._on_quit:
+                        self._on_quit()
+                    return True
+                
+                if self._switch_player_rect.collidepoint(pos):
+                    self._play("menu_select")
+                    if self._on_switch_player:
+                        self._on_switch_player()
+                    return True
+                
+                # Click outside submenu hides it
+                if self._play_submenu_visible:
+                    self._play_submenu_visible = False
+        
+        return False
+    
+    def update(self, dt: float) -> None:
+        """Update menu animations."""
+        self._time += dt
+        
+        # Update submenu animation
+        target = 1.0 if self._play_submenu_visible else 0.0
+        self._submenu_anim += (target - self._submenu_anim) * min(1.0, dt * 15)
+        
+        # Update tooltip animation
+        target = 1.0 if self._tooltip_visible else 0.0
+        self._tooltip_anim += (target - self._tooltip_anim) * min(1.0, dt * 12)
+        
+        # Update sparkles
+        for s in self._sparkles:
+            s['y'] -= s['speed'] * dt
+            s['phase'] += dt * 3
+            if s['y'] < -10:
+                s['y'] = self._screen.get_height() + 10
+                import random
+                s['x'] = random.randint(0, self._screen.get_width())
+    
+    def draw(self) -> None:
+        """Draw the manga-style main menu."""
+        width = self._screen.get_width()
+        height = self._screen.get_height()
+        
+        # Draw background
+        self._draw_background(width, height)
+        
+        # Draw sparkles
+        self._draw_sparkles()
+        
+        # Draw title
+        self._draw_title(width, height)
+        
+        # Draw center buttons
+        self._draw_center_buttons(width, height)
+        
+        # Draw play submenu if visible
+        if self._submenu_anim > 0.01:
+            self._draw_play_submenu(width, height)
+        
+        # Draw left panel (players)
+        self._draw_players_panel(width, height)
+        
+        # Draw right panel (how to play)
+        self._draw_how_to_play(width, height)
+        
+        # Draw tooltip if visible
+        if self._tooltip_anim > 0.01:
+            self._draw_tooltip()
+    
+    def _draw_background(self, width: int, height: int) -> None:
+        """Draw manga-style background."""
+        # Gradient background
+        for y in range(height):
+            progress = y / height
+            r = int(18 + progress * 8)
+            g = int(18 + progress * 6)
+            b = int(28 + progress * 12)
+            pygame.draw.line(self._screen, (r, g, b), (0, y), (width, y))
+        
+        # Manga-style panel pattern
+        pattern_alpha = int(8 + 4 * math.sin(self._time * 1.5))
+        for x in range(0, width, 50):
+            for y in range(0, height, 50):
+                s = pygame.Surface((48, 48), pygame.SRCALPHA)
+                s.fill((30, 30, 45, pattern_alpha))
+                self._screen.blit(s, (x + 1, y + 1))
+    
+    def _draw_sparkles(self) -> None:
+        """Draw decorative sparkle particles."""
+        for s in self._sparkles:
+            alpha = int(s['alpha'] * (0.5 + 0.5 * math.sin(s['phase'])))
+            if alpha > 10:
+                size = int(s['size'] * (0.7 + 0.3 * math.sin(s['phase'])))
+                surf = pygame.Surface((size * 2, size * 2), pygame.SRCALPHA)
+                pygame.draw.circle(surf, (255, 200, 255, alpha), (size, size), size)
+                self._screen.blit(surf, (int(s['x']) - size, int(s['y']) - size))
+    
+    def _draw_title(self, width: int, height: int) -> None:
+        """Draw manga-style title with glow."""
+        title_y = 60 + int(math.sin(self._time * 2) * 5)
+        title_text = "BLOKKUN"
+        
+        # Large title with multiple glow layers
+        title_font = pygame.font.Font(None, 100)
+        
+        # Glow layers
+        glow_colors = [
+            (255, 150, 200, 15),
+            (255, 180, 220, 25),
+            (255, 200, 230, 40),
+        ]
+        
+        for i, color in enumerate(glow_colors):
+            offset = (len(glow_colors) - i) * 4
+            glow = title_font.render(title_text, True, color[:3])
+            glow.set_alpha(color[3])
+            for dx, dy in [(-offset, 0), (offset, 0), (0, -offset), (0, offset)]:
+                x = (width - glow.get_width()) // 2 + dx
+                self._screen.blit(glow, (x, title_y + dy))
+        
+        # Main title
+        title = title_font.render(title_text, True, (255, 255, 255))
+        self._screen.blit(title, ((width - title.get_width()) // 2, title_y))
+        
+        # Subtitle
+        subtitle_font = pygame.font.Font(None, 28)
+        subtitle = subtitle_font.render("A Manga Puzzle Adventure", True, (200, 180, 220))
+        self._screen.blit(subtitle, ((width - subtitle.get_width()) // 2, title_y + 75))
+    
+    def _draw_center_buttons(self, width: int, height: int) -> None:
+        """Draw the main center buttons."""
+        btn_width = 240
+        btn_height = 55
+        btn_spacing = 20
+        start_y = height // 2 - 30
+        center_x = width // 2
+        
+        buttons = [
+            ("PLAY", "play"),
+            ("OPTIONS", "options"),
+            ("EXIT", "exit"),
+        ]
+        
+        for i, (text, btn_id) in enumerate(buttons):
+            y = start_y + i * (btn_height + btn_spacing)
+            rect = pygame.Rect(center_x - btn_width // 2, y, btn_width, btn_height)
+            
+            # Store rect for click detection
+            if btn_id == "play":
+                self._play_btn_rect = rect
+            elif btn_id == "options":
+                self._options_btn_rect = rect
+            elif btn_id == "exit":
+                self._exit_btn_rect = rect
+            
+            # Check hover
+            mouse_pos = pygame.mouse.get_pos()
+            is_hovered = rect.collidepoint(mouse_pos)
+            
+            # Draw button with manga-style
+            self._draw_manga_button(rect, text, is_hovered, 
+                                   accent=(255, 150, 200) if btn_id == "play" else None)
+    
+    def _draw_manga_button(self, rect: pygame.Rect, text: str, is_hovered: bool,
+                          accent: Tuple[int, int, int] = None) -> None:
+        """Draw a manga-style button."""
+        # Base colors
+        if is_hovered:
+            bg_color = (60, 50, 80)
+            border_color = accent or (200, 180, 255)
+        else:
+            bg_color = (40, 35, 55)
+            border_color = (80, 70, 100)
+        
+        # Glow effect on hover
+        if is_hovered:
+            glow_rect = rect.inflate(12, 12)
+            glow = pygame.Surface((glow_rect.width, glow_rect.height), pygame.SRCALPHA)
+            glow_color = accent or (200, 150, 255)
+            pygame.draw.rect(glow, (*glow_color, 30), glow.get_rect(), border_radius=18)
+            self._screen.blit(glow, glow_rect.topleft)
+        
+        # Main button
+        pygame.draw.rect(self._screen, bg_color, rect, border_radius=12)
+        pygame.draw.rect(self._screen, border_color, rect, 2, border_radius=12)
+        
+        # Text
+        font = pygame.font.Font(None, 36)
+        text_color = (255, 255, 255) if is_hovered else (200, 190, 220)
+        text_surf = font.render(text, True, text_color)
+        text_x = rect.x + (rect.width - text_surf.get_width()) // 2
+        text_y = rect.y + (rect.height - text_surf.get_height()) // 2
+        self._screen.blit(text_surf, (text_x, text_y))
+    
+    def _draw_play_submenu(self, width: int, height: int) -> None:
+        """Draw the play submenu that appears on hover."""
+        if self._submenu_anim < 0.01:
+            return
+        
+        # Position next to play button
+        submenu_x = self._play_btn_rect.right + 20
+        submenu_y = self._play_btn_rect.top - 10
+        item_width = 180
+        item_height = 45
+        
+        # Animate slide in
+        offset_x = int(30 * (1.0 - self._submenu_anim))
+        alpha = int(255 * self._submenu_anim)
+        
+        # Draw submenu panel
+        panel_rect = pygame.Rect(submenu_x + offset_x, submenu_y, item_width, item_height * 2 + 20)
+        
+        # Panel background
+        panel = pygame.Surface((panel_rect.width, panel_rect.height), pygame.SRCALPHA)
+        pygame.draw.rect(panel, (35, 30, 50, alpha), panel.get_rect(), border_radius=10)
+        pygame.draw.rect(panel, (100, 80, 140, alpha), panel.get_rect(), 2, border_radius=10)
+        self._screen.blit(panel, panel_rect.topleft)
+        
+        # Draw items
+        items = [("Regular Mode", 0), ("Story Mode", 1)]
+        for text, idx in items:
+            y = submenu_y + 10 + idx * item_height + offset_x // 3
+            rect = pygame.Rect(submenu_x + offset_x + 10, y, item_width - 20, item_height - 5)
+            
+            if idx == 0:
+                self._regular_btn_rect = rect
+            else:
+                self._story_btn_rect = rect
+            
+            is_selected = self._submenu_selected == idx
+            
+            # Draw item
+            if is_selected:
+                bg = pygame.Surface((rect.width, rect.height), pygame.SRCALPHA)
+                pygame.draw.rect(bg, (80, 60, 100, alpha), bg.get_rect(), border_radius=8)
+                self._screen.blit(bg, rect.topleft)
+            
+            font = pygame.font.Font(None, 28)
+            color_alpha = (255, 255, 255) if is_selected else (180, 170, 200)
+            text_surf = font.render(text, True, color_alpha)
+            text_surf.set_alpha(alpha)
+            self._screen.blit(text_surf, (rect.x + 10, rect.y + (rect.height - text_surf.get_height()) // 2))
+    
+    def _draw_players_panel(self, width: int, height: int) -> None:
+        """Draw the players panel on the left."""
+        panel_x = 40
+        panel_y = height // 2 - 100
+        panel_width = 200
+        panel_height = 220
+        
+        # Panel background
+        panel_rect = pygame.Rect(panel_x, panel_y, panel_width, panel_height)
+        pygame.draw.rect(self._screen, (30, 25, 45), panel_rect, border_radius=15)
+        pygame.draw.rect(self._screen, (70, 60, 90), panel_rect, 2, border_radius=15)
+        
+        # Title
+        font_title = pygame.font.Font(None, 26)
+        title = font_title.render("PLAYER", True, (180, 160, 200))
+        self._screen.blit(title, (panel_x + (panel_width - title.get_width()) // 2, panel_y + 15))
+        
+        # Current player avatar (larger)
+        avatar_size = 70
+        avatar_x = panel_x + (panel_width - avatar_size) // 2
+        avatar_y = panel_y + 45
+        
+        # Avatar frame
+        pygame.draw.circle(self._screen, (50, 45, 70), 
+                          (avatar_x + avatar_size // 2, avatar_y + avatar_size // 2), 
+                          avatar_size // 2 + 5)
+        
+        if self._current_player_avatar:
+            # Draw actual avatar
+            try:
+                scaled = pygame.transform.smoothscale(self._current_player_avatar, (avatar_size, avatar_size))
+                # Create circular mask
+                mask = pygame.Surface((avatar_size, avatar_size), pygame.SRCALPHA)
+                pygame.draw.circle(mask, (255, 255, 255, 255), 
+                                 (avatar_size // 2, avatar_size // 2), avatar_size // 2)
+                scaled.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+                self._screen.blit(scaled, (avatar_x, avatar_y))
+            except:
+                self._draw_default_avatar(avatar_x, avatar_y, avatar_size)
+        else:
+            self._draw_default_avatar(avatar_x, avatar_y, avatar_size)
+        
+        # Accent ring
+        pygame.draw.circle(self._screen, (255, 150, 200), 
+                          (avatar_x + avatar_size // 2, avatar_y + avatar_size // 2), 
+                          avatar_size // 2 + 3, 3)
+        
+        # Player name
+        font_name = pygame.font.Font(None, 30)
+        name = self._current_player_name or "Guest"
+        name_surf = font_name.render(name, True, (255, 255, 255))
+        name_x = panel_x + (panel_width - name_surf.get_width()) // 2
+        self._screen.blit(name_surf, (name_x, avatar_y + avatar_size + 10))
+        
+        # Switch player button
+        btn_y = panel_y + panel_height - 45
+        self._switch_player_rect = pygame.Rect(panel_x + 15, btn_y, panel_width - 30, 30)
+        
+        mouse_pos = pygame.mouse.get_pos()
+        is_hovered = self._switch_player_rect.collidepoint(mouse_pos)
+        
+        btn_color = (60, 50, 80) if is_hovered else (45, 40, 60)
+        pygame.draw.rect(self._screen, btn_color, self._switch_player_rect, border_radius=8)
+        
+        font_btn = pygame.font.Font(None, 22)
+        btn_text = font_btn.render("Switch Player", True, (180, 170, 200))
+        btn_text_x = self._switch_player_rect.x + (self._switch_player_rect.width - btn_text.get_width()) // 2
+        self._screen.blit(btn_text, (btn_text_x, btn_y + 7))
+    
+    def _draw_default_avatar(self, x: int, y: int, size: int) -> None:
+        """Draw a default avatar icon."""
+        pygame.draw.circle(self._screen, (70, 60, 100), (x + size // 2, y + size // 2), size // 2)
+        # Simple user icon
+        font = pygame.font.Font(None, size // 2)
+        icon = font.render("?", True, (150, 140, 180))
+        self._screen.blit(icon, (x + (size - icon.get_width()) // 2, y + (size - icon.get_height()) // 2))
+    
+    def _draw_how_to_play(self, width: int, height: int) -> None:
+        """Draw the How To Play panel on the right."""
+        panel_width = 220
+        panel_height = 320
+        panel_x = width - panel_width - 40
+        panel_y = height // 2 - 130
+        
+        # Panel background
+        panel_rect = pygame.Rect(panel_x, panel_y, panel_width, panel_height)
+        pygame.draw.rect(self._screen, (30, 25, 45), panel_rect, border_radius=15)
+        pygame.draw.rect(self._screen, (70, 60, 90), panel_rect, 2, border_radius=15)
+        
+        # Title
+        font_title = pygame.font.Font(None, 26)
+        title = font_title.render("HOW TO PLAY", True, (180, 160, 200))
+        self._screen.blit(title, (panel_x + (panel_width - title.get_width()) // 2, panel_y + 15))
+        
+        # Controls list with visual keys
+        controls = [
+            ("← →", "Move"),
+            ("↓", "Soft Drop"),
+            ("SPACE", "Hard Drop"),
+            ("↑ / W", "Rotate"),
+            ("Z", "Rotate CCW"),
+            ("C", "Hold"),
+            ("ESC", "Pause"),
+        ]
+        
+        font_key = pygame.font.Font(None, 22)
+        font_action = pygame.font.Font(None, 20)
+        
+        y = panel_y + 50
+        for key, action in controls:
+            # Key box
+            key_surf = font_key.render(key, True, (255, 255, 255))
+            key_width = max(50, key_surf.get_width() + 16)
+            key_rect = pygame.Rect(panel_x + 15, y, key_width, 28)
+            pygame.draw.rect(self._screen, (50, 45, 70), key_rect, border_radius=6)
+            pygame.draw.rect(self._screen, (90, 80, 110), key_rect, 1, border_radius=6)
+            self._screen.blit(key_surf, (key_rect.x + (key_width - key_surf.get_width()) // 2, y + 6))
+            
+            # Action text
+            action_surf = font_action.render(action, True, (170, 160, 190))
+            self._screen.blit(action_surf, (panel_x + 15 + key_width + 10, y + 6))
+            
+            y += 36
+    
+    def _draw_tooltip(self) -> None:
+        """Draw manga-style speech bubble tooltip."""
+        if self._tooltip_anim < 0.01 or not self._tooltip_text:
+            return
+        
+        mouse_pos = pygame.mouse.get_pos()
+        
+        # Calculate tooltip size based on text
+        font = pygame.font.Font(None, 22)
+        lines = self._tooltip_text.split('\n')
+        line_surfs = [font.render(line, True, (255, 255, 255)) for line in lines]
+        
+        max_width = max(s.get_width() for s in line_surfs) + 24
+        total_height = len(line_surfs) * 22 + 16
+        
+        # Position above mouse
+        tip_x = min(mouse_pos[0] + 15, self._screen.get_width() - max_width - 10)
+        tip_y = max(10, mouse_pos[1] - total_height - 15)
+        
+        # Apply animation
+        alpha = int(220 * self._tooltip_anim)
+        offset_y = int(10 * (1.0 - self._tooltip_anim))
+        
+        tip_y += offset_y
+        
+        # Draw speech bubble
+        bubble_rect = pygame.Rect(tip_x, tip_y, max_width, total_height)
+        
+        bubble = pygame.Surface((max_width, total_height), pygame.SRCALPHA)
+        pygame.draw.rect(bubble, (45, 40, 65, alpha), bubble.get_rect(), border_radius=10)
+        pygame.draw.rect(bubble, (120, 100, 160, alpha), bubble.get_rect(), 2, border_radius=10)
+        self._screen.blit(bubble, (tip_x, tip_y))
+        
+        # Draw text
+        for i, surf in enumerate(line_surfs):
+            surf.set_alpha(alpha)
+            self._screen.blit(surf, (tip_x + 12, tip_y + 8 + i * 22))
 
 
 class SettingsMenu(Menu):
-    """Settings menu with volume, visual options, and gameplay settings."""
+    """Settings menu with volume, visual options, and player management."""
     
     def __init__(self, screen: pygame.Surface):
-        super().__init__(screen, "SETTINGS")
+        super().__init__(screen, "OPTIONS")
         
         self._on_back_callback: Optional[Callable] = None
         self._on_volume_change: Optional[Callable[[str, float], None]] = None
@@ -553,11 +1085,13 @@ class SettingsMenu(Menu):
         self._on_toggle_ghost: Optional[Callable[[bool], None]] = None
         self._on_toggle_particles: Optional[Callable[[bool], None]] = None
         self._on_toggle_shake: Optional[Callable[[bool], None]] = None
+        self._on_leaderboard: Optional[Callable] = None
+        self._on_add_player: Optional[Callable] = None
         
         self._master_volume = 0.8
         self._sfx_volume = 0.7
         self._music_volume = 0.5
-        self._current_palette = "classic"
+        self._current_palette = "anime"
         self._ghost_enabled = True
         self._particles_enabled = True
         self._shake_enabled = True
@@ -573,10 +1107,12 @@ class SettingsMenu(Menu):
                     slider_callback=lambda v: self._set_volume("sfx", v)),
             MenuItem("Music", is_slider=True, slider_value=self._music_volume,
                     slider_callback=lambda v: self._set_volume("music", v)),
-            MenuItem("THEME: CLASSIC", action=self._cycle_palette),
+            MenuItem("THEME: Anime", action=self._cycle_palette),
             MenuItem("GHOST PIECE: ON", action=self._toggle_ghost),
             MenuItem("PARTICLES: ON", action=self._toggle_particles),
             MenuItem("SCREEN SHAKE: ON", action=self._toggle_shake),
+            MenuItem("LEADERBOARD", action=self._show_leaderboard),
+            MenuItem("ADD PLAYER", action=self._add_player),
             MenuItem("BACK", action=self._go_back),
         ]
         for i in range(len(self._items)):
@@ -596,12 +1132,20 @@ class SettingsMenu(Menu):
     
     def _cycle_palette(self) -> None:
         """Cycle through available palettes."""
-        palettes = ["classic", "neon", "pastel"]
-        idx = palettes.index(self._current_palette)
+        # Import theme order from settings
+        from settings import THEME_ORDER
+        palettes = THEME_ORDER
+        
+        try:
+            idx = palettes.index(self._current_palette)
+        except ValueError:
+            idx = 0
+        
         self._current_palette = palettes[(idx + 1) % len(palettes)]
         
-        # Update button text
-        self._items[3].text = f"THEME: {self._current_palette.upper()}"
+        # Update button text - format nicely
+        display_name = self._current_palette.replace('_', ' ').title()
+        self._items[3].text = f"THEME: {display_name}"
         
         if self._on_palette_change:
             self._on_palette_change(self._current_palette)
@@ -627,6 +1171,16 @@ class SettingsMenu(Menu):
         if self._on_toggle_shake:
             self._on_toggle_shake(self._shake_enabled)
     
+    def _show_leaderboard(self) -> None:
+        """Show leaderboard."""
+        if self._on_leaderboard:
+            self._on_leaderboard()
+    
+    def _add_player(self) -> None:
+        """Add new player."""
+        if self._on_add_player:
+            self._on_add_player()
+    
     def _go_back(self) -> None:
         """Go back to previous menu."""
         if self._on_back_callback:
@@ -639,7 +1193,9 @@ class SettingsMenu(Menu):
         on_palette_change: Callable[[str], None] = None,
         on_toggle_ghost: Callable[[bool], None] = None,
         on_toggle_particles: Callable[[bool], None] = None,
-        on_toggle_shake: Callable[[bool], None] = None
+        on_toggle_shake: Callable[[bool], None] = None,
+        on_leaderboard: Callable = None,
+        on_add_player: Callable = None
     ) -> None:
         """Set settings callbacks."""
         self._on_back_callback = on_back
@@ -649,6 +1205,8 @@ class SettingsMenu(Menu):
         self._on_toggle_ghost = on_toggle_ghost
         self._on_toggle_particles = on_toggle_particles
         self._on_toggle_shake = on_toggle_shake
+        self._on_leaderboard = on_leaderboard
+        self._on_add_player = on_add_player
     
     def set_values(self, master: float, sfx: float, music: float, palette: str,
                    ghost: bool = True, particles: bool = True, shake: bool = True) -> None:
@@ -669,7 +1227,8 @@ class SettingsMenu(Menu):
         if len(self._items) > 2:
             self._items[2].slider_value = music
         if len(self._items) > 3:
-            self._items[3].text = f"THEME: {palette.upper()}"
+            display_name = palette.replace('_', ' ').title()
+            self._items[3].text = f"THEME: {display_name}"
         if len(self._items) > 4:
             self._items[4].text = f"GHOST PIECE: {'ON' if ghost else 'OFF'}"
         if len(self._items) > 5:

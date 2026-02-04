@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 """
-Modern Tetris - A polished Tetris clone with pygame-ce.
+Blokkun - A Manga-Style Puzzle Adventure
+
+A polished Tetris clone with pygame-ce featuring manga/anime aesthetics.
 
 Features:
 - 25-stage system with increasing difficulty
 - Player profiles and leaderboard
 - Save/load system
-- Modern UI with animations
-- Countdown before game start
-- Timer display
+- Manga-style UI with animations
+- Multiple themes (Anime, Kawaii, Manga B&W, Neon, etc.)
+- Loading screen and polished transitions
 
 Controls:
 - Arrow keys or WASD: Move left/right, soft drop
@@ -18,7 +20,7 @@ Controls:
 - C: Hold piece
 - Escape: Pause/Exit
 
-Author: Modern Tetris Project
+Author: Blokkun Project
 """
 
 import sys
@@ -35,12 +37,13 @@ except ImportError:
         sys.exit(1)
 
 from settings import (
-    WINDOW_WIDTH, WINDOW_HEIGHT, FPS,
+    WINDOW_WIDTH, WINDOW_HEIGHT, FPS, GAME_NAME,
     CELL_SIZE, DAS_DELAY, ARR_RATE, SOFT_DROP_RATE,
     LOCK_DELAY_FRAMES, MAX_LOCK_RESETS,
     PALETTES, DEFAULT_PALETTE,
     MASTER_VOLUME, MUSIC_VOLUME, SFX_VOLUME,
-    SCORE_PER_ROW, SAVE_DIRECTORY, NEXT_PIECES_PREVIEW
+    SCORE_PER_ROW, SAVE_DIRECTORY, NEXT_PIECES_PREVIEW,
+    AVATAR_SIZE_GAMEPLAY
 )
 
 from src.engine.game_loop import GameLoop, GameState
@@ -53,6 +56,7 @@ from src.audio.audio_manager import AudioManager, create_placeholder_sounds
 from src.ui.menu import MainMenu, PauseMenu, GameOverMenu, SettingsMenu
 from src.ui.overlays import Countdown, StageTransition, ConfirmDialog
 from src.ui.screens import NameEntryScreen, LeaderboardScreen
+from src.ui.loading import LoadingScreen
 from src.save.save_manager import SaveManager
 from src.util.events import EventBus, GameEvent
 
@@ -127,6 +131,11 @@ class TetrisApp:
         self._game_over_menu = GameOverMenu(self._screen)
         self._settings_menu = SettingsMenu(self._screen)
         
+        # Initialize loading screen
+        self._loading_screen = LoadingScreen(self._screen, GAME_NAME)
+        self._loading_screen.set_on_complete(self._on_loading_complete)
+        self._in_loading = True
+        
         # Initialize overlays
         self._countdown = Countdown(self._screen)
         self._stage_transition = StageTransition(self._screen)
@@ -158,6 +167,10 @@ class TetrisApp:
         self._in_countdown = False
         self._waiting_for_profile = False
         
+        # Window dragging support
+        self._dragging_window = False
+        self._drag_offset = (0, 0)
+        
         # Menu button rect for gameplay (initialized in draw)
         self._menu_button_rect = pygame.Rect(0, 0, 0, 0)
         
@@ -168,6 +181,13 @@ class TetrisApp:
         self._events = EventBus()
         self._setup_events()
         
+        # Update main menu with player info
+        self._update_main_menu_player()
+    
+    def _on_loading_complete(self) -> None:
+        """Called when loading screen finishes."""
+        self._in_loading = False
+        
         # Check if we need profile creation
         if not self._save_manager.profiles.has_profiles:
             self._waiting_for_profile = True
@@ -175,6 +195,15 @@ class TetrisApp:
                 on_confirm=self._on_profile_created,
                 on_cancel=self._quit
             )
+    
+    def _update_main_menu_player(self) -> None:
+        """Update main menu with current player info."""
+        player = self._save_manager.current_player
+        if player:
+            avatar = player.get_avatar_surface()
+            self._main_menu.set_player_info(player.name, avatar)
+        else:
+            self._main_menu.set_player_info("Guest", None)
     
     def _setup_main_menu_extras(self) -> None:
         """Add extra buttons to main menu."""
@@ -184,14 +213,13 @@ class TetrisApp:
     
     def _setup_menus(self) -> None:
         """Configure menu callbacks."""
-        # Main menu - updated for new structure
+        # Main menu - updated for new manga-style structure
         self._main_menu.set_callbacks(
             on_regular=self._request_regular_game,
             on_story=self._request_story_mode,
-            on_leaderboard=self._show_leaderboard,
-            on_add_player=self._show_add_player,
             on_settings=self._open_settings_from_menu,
-            on_quit=self._request_quit
+            on_quit=self._request_quit,
+            on_switch_player=self._show_switch_player
         )
         
         # Pause menu
@@ -208,14 +236,16 @@ class TetrisApp:
             on_quit=self._quit_to_menu
         )
         
-        # Settings menu - with additional callbacks
+        # Settings menu - with additional callbacks for leaderboard and add player
         self._settings_menu.set_callbacks(
             on_back=self._close_settings,
             on_volume_change=self._on_volume_change,
             on_palette_change=self._on_palette_change,
             on_toggle_ghost=self._on_toggle_ghost,
             on_toggle_particles=self._on_toggle_particles,
-            on_toggle_shake=self._on_toggle_shake
+            on_toggle_shake=self._on_toggle_shake,
+            on_leaderboard=self._show_leaderboard,
+            on_add_player=self._show_add_player
         )
         
         # Countdown
@@ -244,6 +274,7 @@ class TetrisApp:
         profile = self._save_manager.profiles.create_profile(name, avatar_path)
         self._save_manager.profiles.set_current_profile(profile.id)
         self._waiting_for_profile = False
+        self._update_main_menu_player()
     
     def _request_regular_game(self) -> None:
         """Request to start a regular game."""
@@ -279,6 +310,25 @@ class TetrisApp:
             on_confirm=self._on_profile_created,
             on_cancel=lambda: setattr(self, '_waiting_for_profile', False)
         )
+    
+    def _show_switch_player(self) -> None:
+        """Show player switch/selection dialog."""
+        profiles = self._save_manager.profiles.get_all_profiles()
+        if len(profiles) <= 1:
+            # No other players, show add player instead
+            self._show_add_player()
+        else:
+            # For now, cycle to next player
+            current = self._save_manager.current_player
+            current_idx = 0
+            for i, p in enumerate(profiles):
+                if current and p.id == current.id:
+                    current_idx = i
+                    break
+            next_idx = (current_idx + 1) % len(profiles)
+            self._save_manager.profiles.set_current_profile(profiles[next_idx].id)
+            self._update_main_menu_player()
+            self._audio.play_sound("menu_select")
     
     def _on_profile_created_and_start(self, name: str, avatar_path: Optional[str]) -> None:
         """Handle profile creation and start game."""
@@ -536,6 +586,34 @@ class TetrisApp:
             self._request_quit()
             return
         
+        # Handle window dragging (borderless window)
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            # Check if clicking on top area (drag zone) - top 40 pixels
+            if event.pos[1] < 40 and not self._in_loading:
+                self._dragging_window = True
+                self._drag_offset = event.pos
+                return
+        
+        if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+            self._dragging_window = False
+        
+        if event.type == pygame.MOUSEMOTION and self._dragging_window:
+            x, y = pygame.display.get_window_position() if hasattr(pygame.display, 'get_window_position') else (0, 0)
+            new_x = x + event.pos[0] - self._drag_offset[0]
+            new_y = y + event.pos[1] - self._drag_offset[1]
+            try:
+                pygame.display.set_window_position((new_x, new_y))
+            except AttributeError:
+                # Fallback for older pygame versions
+                pass
+            return
+        
+        # Handle loading screen - allow skipping with any key
+        if self._in_loading:
+            if event.type == pygame.KEYDOWN or event.type == pygame.MOUSEBUTTONDOWN:
+                self._loading_screen.skip()
+            return
+        
         # Handle confirm dialog first
         if self._confirm_dialog.is_active:
             self._confirm_dialog.handle_event(event)
@@ -585,6 +663,11 @@ class TetrisApp:
     
     def _update(self, dt: float) -> None:
         """Update game logic."""
+        # Update loading screen
+        if self._in_loading:
+            self._loading_screen.update(dt)
+            return
+        
         # Update confirm dialog
         if self._confirm_dialog.is_active:
             self._confirm_dialog.update(dt)
@@ -645,6 +728,11 @@ class TetrisApp:
     
     def _render(self) -> None:
         """Render the game."""
+        # Render loading screen first
+        if self._in_loading:
+            self._loading_screen.draw()
+            return
+        
         # Render confirm dialog on top of everything
         if self._confirm_dialog.is_active:
             self._render_game_background()
@@ -679,7 +767,7 @@ class TetrisApp:
         
         if self._state == GameState.MENU:
             self._main_menu.draw()
-            self._draw_player_info()
+            # Player info is now drawn by the new MainMenu class
         
         elif self._state == GameState.PLAYING and self._game:
             self._renderer.render(self._game)
@@ -743,13 +831,13 @@ class TetrisApp:
         if not player:
             return
         
-        # Avatar position
-        avatar_size = 40
+        # Avatar position - use larger size from settings
+        avatar_size = AVATAR_SIZE_GAMEPLAY
         avatar_x = 20
         avatar_y = 20
         
-        # Draw circular avatar with frame
-        pygame.draw.circle(self._screen, (60, 60, 80), (avatar_x + avatar_size // 2, avatar_y + avatar_size // 2), avatar_size // 2 + 3)
+        # Draw circular avatar with manga-style frame
+        pygame.draw.circle(self._screen, (50, 45, 70), (avatar_x + avatar_size // 2, avatar_y + avatar_size // 2), avatar_size // 2 + 5)
         
         # Get player avatar surface (PlayerProfile always has this method)
         avatar_surface = player.get_avatar_surface()
@@ -762,20 +850,20 @@ class TetrisApp:
             scaled.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
             self._screen.blit(scaled, (avatar_x, avatar_y))
         else:
-            # Default avatar - draw a simple person silhouette
-            pygame.draw.circle(self._screen, (80, 100, 130), (avatar_x + avatar_size // 2, avatar_y + avatar_size // 2), avatar_size // 2)
+            # Default avatar - draw a simple manga-style silhouette
+            pygame.draw.circle(self._screen, (70, 60, 100), (avatar_x + avatar_size // 2, avatar_y + avatar_size // 2), avatar_size // 2)
             # Draw simple user icon
-            font = pygame.font.Font(None, 28)
-            icon = font.render("👤", True, (200, 200, 220))
+            font = pygame.font.Font(None, avatar_size // 2)
+            icon = font.render("?", True, (150, 140, 180))
             self._screen.blit(icon, (avatar_x + (avatar_size - icon.get_width()) // 2, avatar_y + (avatar_size - icon.get_height()) // 2))
         
-        # Draw accent frame
-        pygame.draw.circle(self._screen, (100, 180, 255), (avatar_x + avatar_size // 2, avatar_y + avatar_size // 2), avatar_size // 2 + 2, 2)
+        # Draw accent frame - pink/manga colored
+        pygame.draw.circle(self._screen, (255, 150, 200), (avatar_x + avatar_size // 2, avatar_y + avatar_size // 2), avatar_size // 2 + 3, 3)
         
         # Draw player name next to avatar
-        font = pygame.font.Font(None, 26)
-        name_surf = font.render(player.name, True, (200, 220, 255))
-        self._screen.blit(name_surf, (avatar_x + avatar_size + 12, avatar_y + (avatar_size - name_surf.get_height()) // 2))
+        font = pygame.font.Font(None, 28)
+        name_surf = font.render(player.name, True, (255, 255, 255))
+        self._screen.blit(name_surf, (avatar_x + avatar_size + 15, avatar_y + (avatar_size - name_surf.get_height()) // 2))
     
     def _draw_menu_button(self) -> None:
         """Draw a clickable menu button in the upper right corner."""

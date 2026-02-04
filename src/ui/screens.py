@@ -442,7 +442,9 @@ class LeaderboardScreen:
             score_text = self._font_entry.render(f"{entry.score:,}", True, (255, 255, 255))
             self._screen.blit(score_text, (header_x[2], y))
             
-            stage_text = self._font_entry.render(str(entry.stage), True, (180, 220, 180))
+            # Show stage with name if available
+            stage_display = getattr(entry, 'stage_name', str(entry.stage))
+            stage_text = self._font_entry.render(stage_display, True, (180, 220, 180))
             self._screen.blit(stage_text, (header_x[3], y))
             
             time_text = self._font_entry.render(entry.formatted_time, True, (180, 180, 220))

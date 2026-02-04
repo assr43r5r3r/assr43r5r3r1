@@ -5,8 +5,18 @@ Leaderboard system for tracking high scores.
 import json
 import os
 from typing import List, Optional, Dict, Any
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from datetime import datetime
+
+
+# Stage name mapping
+STAGE_NAMES = {
+    1: "Beginner", 2: "Novice", 3: "Amateur", 4: "Rookie", 5: "Starter",
+    6: "Apprentice", 7: "Journeyman", 8: "Skilled", 9: "Adept", 10: "Expert",
+    11: "Veteran", 12: "Elite", 13: "Master", 14: "Grandmaster", 15: "Champion",
+    16: "Hero", 17: "Legend", 18: "Mythic", 19: "Divine", 20: "Celestial",
+    21: "Cosmic", 22: "Transcendent", 23: "Eternal", 24: "Supreme", 25: "Ultimate",
+}
 
 
 @dataclass
@@ -37,6 +47,11 @@ class LeaderboardEntry:
         minutes = int(self.time_played // 60)
         seconds = int(self.time_played % 60)
         return f"{minutes:02d}:{seconds:02d}"
+    
+    @property
+    def stage_name(self) -> str:
+        """Get human-readable stage name."""
+        return STAGE_NAMES.get(self.stage, f"Stage {self.stage}")
 
 
 class Leaderboard:
@@ -106,6 +121,8 @@ class Leaderboard:
         """
         Add a new leaderboard entry.
         
+        Only keeps the best entry per player (by score).
+        
         Args:
             player_name: Player name
             player_id: Player profile ID
@@ -126,7 +143,19 @@ class Leaderboard:
             time_played=time_played
         )
         
-        self._entries.append(entry)
+        # Remove any existing entry for this player with lower score
+        self._entries = [
+            e for e in self._entries 
+            if e.player_id != player_id or e.score > score
+        ]
+        
+        # Only add if this score isn't beaten by an existing entry
+        existing_best = self.get_player_best(player_id)
+        if existing_best is None or score > existing_best.score:
+            # Remove the old best (if any) and add new one
+            self._entries = [e for e in self._entries if e.player_id != player_id]
+            self._entries.append(entry)
+        
         self._sort()
         
         # Trim to max entries
@@ -136,10 +165,10 @@ class Leaderboard:
         self._save()
         
         # Find position
-        try:
-            return self._entries.index(entry) + 1
-        except ValueError:
-            return -1
+        for i, e in enumerate(self._entries):
+            if e.player_id == player_id:
+                return i + 1
+        return -1
     
     def get_top(self, count: int = 10) -> List[LeaderboardEntry]:
         """Get top N entries."""
