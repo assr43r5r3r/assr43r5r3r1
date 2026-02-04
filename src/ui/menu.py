@@ -479,31 +479,32 @@ class Menu:
 
 class MainMenu(Menu):
     """
-    Manga-style Main menu with Play hover options, Players panel, How To Play box.
+    Modern Main menu with falling blocks background.
     
     Layout:
-    - Left: Players panel (current player, switch player)
-    - Center: Play, Options, Exit buttons (Play shows submenu on hover)
-    - Right: How To Play box with visual controls
-    - Bottom: Tooltips appear on hover
+    - Left corner: Options button (icon), Leaderboard button (icon) above it
+    - Center: Floating logo, Play button, Exit button
+    - Right: How To Play box with visual key buttons
+    - Play click shows Regular/Story mode selection
+    - No hover tooltips except for leaderboard
     """
     
     def __init__(self, screen: pygame.Surface):
-        super().__init__(screen, "")  # No title, we'll draw custom
+        super().__init__(screen, "")  # No title, we'll draw custom logo
         
         self._on_regular_mode: Optional[Callable] = None
         self._on_story_mode: Optional[Callable] = None
         self._on_options: Optional[Callable] = None
         self._on_quit: Optional[Callable] = None
         self._on_switch_player: Optional[Callable] = None
+        self._on_leaderboard: Optional[Callable] = None
         
-        # Custom state for manga-style menu
-        self._play_hovered = False
+        # Play submenu state (click to show, not hover)
         self._play_submenu_visible = False
         self._submenu_anim = 0.0
         self._submenu_selected = 0  # 0=Regular, 1=Story
         
-        # Tooltip state
+        # Tooltip state - only for leaderboard button
         self._tooltip_text = ""
         self._tooltip_visible = False
         self._tooltip_anim = 0.0
@@ -511,7 +512,7 @@ class MainMenu(Menu):
         # Player info (set externally)
         self._current_player_name = ""
         self._current_player_avatar = None
-        self._players_list = []  # List of (name, avatar) tuples
+        self._players_list = []
         
         # Button positions (calculated in draw)
         self._play_btn_rect = pygame.Rect(0, 0, 0, 0)
@@ -520,32 +521,51 @@ class MainMenu(Menu):
         self._regular_btn_rect = pygame.Rect(0, 0, 0, 0)
         self._story_btn_rect = pygame.Rect(0, 0, 0, 0)
         self._switch_player_rect = pygame.Rect(0, 0, 0, 0)
+        self._leaderboard_btn_rect = pygame.Rect(0, 0, 0, 0)
         
-        # Decorative elements
+        # Falling blocks background
+        self._falling_blocks = []
+        self._init_falling_blocks()
+        
+        # Sparkle particles
         self._sparkles = []
         self._init_sparkles()
         
-        # Tooltip definitions
-        self._tooltips = {
-            "play": "Choose your game mode!\nRegular for classic gameplay,\nStory for an epic adventure!",
-            "options": "Customize your experience!\nChange themes, volume, and more.",
-            "exit": "Exit the game.\nYour progress is automatically saved!",
-            "regular": "Classic Tetris gameplay.\nClear lines, advance stages,\nand aim for high scores!",
-            "story": "Coming Soon!\nEmbark on an epic puzzle\nadventure with unique characters.",
-        }
+        # Leaderboard tooltip
+        self._leaderboard_tooltip = "View high scores\nand player rankings"
         
         self._build_menu()
     
+    def _init_falling_blocks(self) -> None:
+        """Initialize falling background blocks."""
+        colors = [
+            (100, 180, 255, 30),  # Blue
+            (100, 255, 180, 25),  # Green
+            (255, 180, 100, 20),  # Orange
+            (200, 150, 255, 25),  # Purple
+            (255, 200, 100, 20),  # Yellow
+        ]
+        for _ in range(15):
+            self._falling_blocks.append({
+                'x': random.randint(0, self._screen.get_width()),
+                'y': random.randint(-200, self._screen.get_height()),
+                'size': random.randint(25, 50),
+                'speed': random.uniform(30, 80),
+                'color': random.choice(colors),
+                'rotation': random.uniform(0, 360),
+                'rot_speed': random.uniform(-30, 30),
+            })
+    
     def _init_sparkles(self) -> None:
         """Initialize decorative sparkle particles."""
-        for i in range(20):
+        for _ in range(20):
             self._sparkles.append({
                 'x': random.randint(0, self._screen.get_width()),
                 'y': random.randint(0, self._screen.get_height()),
-                'size': random.uniform(2, 6),
-                'speed': random.uniform(20, 60),
+                'size': random.uniform(2, 5),
+                'speed': random.uniform(20, 50),
                 'phase': random.uniform(0, 6.28),
-                'alpha': random.randint(50, 150),
+                'alpha': random.randint(40, 120),
             })
     
     def _build_menu(self) -> None:
@@ -563,8 +583,8 @@ class MainMenu(Menu):
         self,
         on_regular: Callable = None,
         on_story: Callable = None,
-        on_leaderboard: Callable = None,  # Now in options
-        on_add_player: Callable = None,   # Now in options
+        on_leaderboard: Callable = None,
+        on_add_player: Callable = None,
         on_settings: Callable = None,
         on_quit: Callable = None,
         on_switch_player: Callable = None
@@ -572,7 +592,8 @@ class MainMenu(Menu):
         """Set menu callbacks."""
         self._on_regular_mode = on_regular
         self._on_story_mode = on_story
-        self._on_options = on_settings  # Options leads to settings
+        self._on_leaderboard = on_leaderboard
+        self._on_options = on_settings
         self._on_quit = on_quit
         self._on_switch_player = on_switch_player
     
@@ -593,10 +614,12 @@ class MainMenu(Menu):
                 if self._play_submenu_visible:
                     if self._submenu_selected == 0:
                         self._play("menu_select")
+                        self._play_submenu_visible = False
                         if self._on_regular_mode:
                             self._on_regular_mode()
                     else:
                         self._play("menu_select")
+                        self._play_submenu_visible = False
                         if self._on_story_mode:
                             self._on_story_mode()
                     return True
@@ -604,43 +627,24 @@ class MainMenu(Menu):
         elif event.type == pygame.MOUSEMOTION:
             pos = event.pos
             
-            # Check button hovers and update tooltip
-            old_tooltip = self._tooltip_text
+            # Only show tooltip for leaderboard button
             self._tooltip_text = ""
             self._tooltip_visible = False
             
-            if self._play_btn_rect.collidepoint(pos):
-                self._play_hovered = True
-                self._play_submenu_visible = True
-                self._tooltip_text = self._tooltips["play"]
-                self._tooltip_visible = True
-            else:
-                if not self._regular_btn_rect.collidepoint(pos) and not self._story_btn_rect.collidepoint(pos):
-                    self._play_hovered = False
-                    # Keep submenu visible briefly when moving between buttons
-                    if not self._play_submenu_visible:
-                        pass  # Already hidden
-            
-            if self._options_btn_rect.collidepoint(pos):
-                self._tooltip_text = self._tooltips["options"]
+            if self._leaderboard_btn_rect.collidepoint(pos):
+                self._tooltip_text = self._leaderboard_tooltip
                 self._tooltip_visible = True
             
-            if self._exit_btn_rect.collidepoint(pos):
-                self._tooltip_text = self._tooltips["exit"]
-                self._tooltip_visible = True
-            
-            if self._regular_btn_rect.collidepoint(pos) and self._play_submenu_visible:
-                self._submenu_selected = 0
-                self._tooltip_text = self._tooltips["regular"]
-                self._tooltip_visible = True
-            
-            if self._story_btn_rect.collidepoint(pos) and self._play_submenu_visible:
-                self._submenu_selected = 1
-                self._tooltip_text = self._tooltips["story"]
-                self._tooltip_visible = True
-            
-            if old_tooltip != self._tooltip_text and self._tooltip_text:
-                self._play("menu_move")
+            # Update submenu selection on hover (but don't auto-show submenu)
+            if self._play_submenu_visible:
+                if self._regular_btn_rect.collidepoint(pos):
+                    if self._submenu_selected != 0:
+                        self._submenu_selected = 0
+                        self._play("menu_move")
+                elif self._story_btn_rect.collidepoint(pos):
+                    if self._submenu_selected != 1:
+                        self._submenu_selected = 1
+                        self._play("menu_move")
             
             return True
         
@@ -648,27 +652,38 @@ class MainMenu(Menu):
             if event.button == 1:
                 pos = event.pos
                 
+                # Mode selection from submenu
                 if self._regular_btn_rect.collidepoint(pos) and self._play_submenu_visible:
                     self._play("menu_select")
+                    self._play_submenu_visible = False
                     if self._on_regular_mode:
                         self._on_regular_mode()
                     return True
                 
                 if self._story_btn_rect.collidepoint(pos) and self._play_submenu_visible:
                     self._play("menu_select")
+                    self._play_submenu_visible = False
                     if self._on_story_mode:
                         self._on_story_mode()
                     return True
                 
+                # Play button - click to toggle submenu
                 if self._play_btn_rect.collidepoint(pos):
                     self._play_submenu_visible = not self._play_submenu_visible
                     self._play("menu_select")
                     return True
                 
+                # Icon buttons in left corner
                 if self._options_btn_rect.collidepoint(pos):
                     self._play("menu_select")
                     if self._on_options:
                         self._on_options()
+                    return True
+                
+                if self._leaderboard_btn_rect.collidepoint(pos):
+                    self._play("menu_select")
+                    if self._on_leaderboard:
+                        self._on_leaderboard()
                     return True
                 
                 if self._exit_btn_rect.collidepoint(pos):
@@ -701,6 +716,14 @@ class MainMenu(Menu):
         target = 1.0 if self._tooltip_visible else 0.0
         self._tooltip_anim += (target - self._tooltip_anim) * min(1.0, dt * 12)
         
+        # Update falling blocks
+        for block in self._falling_blocks:
+            block['y'] += block['speed'] * dt
+            block['rotation'] += block['rot_speed'] * dt
+            if block['y'] > self._screen.get_height() + 50:
+                block['y'] = -50
+                block['x'] = random.randint(0, self._screen.get_width())
+        
         # Update sparkles
         for s in self._sparkles:
             s['y'] -= s['speed'] * dt
@@ -710,53 +733,73 @@ class MainMenu(Menu):
                 s['x'] = random.randint(0, self._screen.get_width())
     
     def draw(self) -> None:
-        """Draw the manga-style main menu."""
+        """Draw the modern main menu."""
         width = self._screen.get_width()
         height = self._screen.get_height()
         
-        # Draw background
+        # Draw background with falling blocks
         self._draw_background(width, height)
         
         # Draw sparkles
         self._draw_sparkles()
         
-        # Draw title
-        self._draw_title(width, height)
+        # Draw floating logo
+        self._draw_floating_logo(width, height)
         
-        # Draw center buttons
+        # Draw center buttons (Play, Exit)
         self._draw_center_buttons(width, height)
         
         # Draw play submenu if visible
         if self._submenu_anim > 0.01:
             self._draw_play_submenu(width, height)
         
+        # Draw left corner buttons (Options, Leaderboard icons)
+        self._draw_corner_buttons(width, height)
+        
         # Draw left panel (players)
         self._draw_players_panel(width, height)
         
-        # Draw right panel (how to play)
+        # Draw right panel (how to play with visual keys)
         self._draw_how_to_play(width, height)
         
-        # Draw tooltip if visible
+        # Draw tooltip if visible (only for leaderboard)
         if self._tooltip_anim > 0.01:
             self._draw_tooltip()
     
     def _draw_background(self, width: int, height: int) -> None:
-        """Draw manga-style background."""
+        """Draw modern background with falling blocks."""
         # Gradient background
         for y in range(height):
             progress = y / height
-            r = int(18 + progress * 8)
-            g = int(18 + progress * 6)
-            b = int(28 + progress * 12)
+            r = int(15 + progress * 10)
+            g = int(15 + progress * 8)
+            b = int(25 + progress * 15)
             pygame.draw.line(self._screen, (r, g, b), (0, y), (width, y))
         
-        # Manga-style panel pattern
-        pattern_alpha = int(8 + 4 * math.sin(self._time * 1.5))
+        # Grid pattern
+        pattern_alpha = int(6 + 3 * math.sin(self._time * 1.5))
         for x in range(0, width, 50):
             for y in range(0, height, 50):
                 s = pygame.Surface((48, 48), pygame.SRCALPHA)
-                s.fill((30, 30, 45, pattern_alpha))
+                s.fill((35, 35, 50, pattern_alpha))
                 self._screen.blit(s, (x + 1, y + 1))
+        
+        # Draw falling blocks
+        for block in self._falling_blocks:
+            size = block['size']
+            x, y = int(block['x']), int(block['y'])
+            
+            s = pygame.Surface((size, size), pygame.SRCALPHA)
+            color = block['color']
+            pygame.draw.rect(s, color, s.get_rect(), border_radius=5)
+            
+            # Add highlight
+            highlight = (min(255, color[0] + 40), min(255, color[1] + 40), min(255, color[2] + 40), color[3] // 2)
+            pygame.draw.line(s, highlight, (3, 3), (size - 3, 3), 2)
+            
+            rotated = pygame.transform.rotate(s, block['rotation'])
+            rect = rotated.get_rect(center=(x, y))
+            self._screen.blit(rotated, rect)
     
     def _draw_sparkles(self) -> None:
         """Draw decorative sparkle particles."""
@@ -765,108 +808,141 @@ class MainMenu(Menu):
             if alpha > 10:
                 size = int(s['size'] * (0.7 + 0.3 * math.sin(s['phase'])))
                 surf = pygame.Surface((size * 2, size * 2), pygame.SRCALPHA)
-                pygame.draw.circle(surf, (255, 200, 255, alpha), (size, size), size)
+                pygame.draw.circle(surf, (180, 220, 255, alpha), (size, size), size)
                 self._screen.blit(surf, (int(s['x']) - size, int(s['y']) - size))
     
-    def _draw_title(self, width: int, height: int) -> None:
-        """Draw manga-style title with glow."""
-        title_y = 60 + int(math.sin(self._time * 2) * 5)
-        title_text = "BLOKKUN"
+    def _draw_floating_logo(self, width: int, height: int) -> None:
+        """Draw floating game logo with glow effect."""
+        logo_y = 80 + int(math.sin(self._time * 2) * 8)
+        logo_text = "BLOCKFALL"
         
-        # Large title with multiple glow layers
-        title_font = pygame.font.Font(None, 100)
+        # Large title font
+        logo_font = pygame.font.Font(None, 100)
         
-        # Glow layers
+        # Modern blue glow layers
         glow_colors = [
-            (255, 150, 200, 15),
-            (255, 180, 220, 25),
-            (255, 200, 230, 40),
+            (80, 150, 255, 15),
+            (100, 180, 255, 25),
+            (130, 200, 255, 40),
         ]
         
         for i, color in enumerate(glow_colors):
             offset = (len(glow_colors) - i) * 4
-            glow = title_font.render(title_text, True, color[:3])
+            glow = logo_font.render(logo_text, True, color[:3])
             glow.set_alpha(color[3])
             for dx, dy in [(-offset, 0), (offset, 0), (0, -offset), (0, offset)]:
                 x = (width - glow.get_width()) // 2 + dx
-                self._screen.blit(glow, (x, title_y + dy))
+                self._screen.blit(glow, (x, logo_y + dy))
         
-        # Main title
-        title = title_font.render(title_text, True, (255, 255, 255))
-        self._screen.blit(title, ((width - title.get_width()) // 2, title_y))
+        # Main logo
+        logo = logo_font.render(logo_text, True, (255, 255, 255))
+        self._screen.blit(logo, ((width - logo.get_width()) // 2, logo_y))
+    
+    def _draw_corner_buttons(self, width: int, height: int) -> None:
+        """Draw icon buttons in left corner (Options, Leaderboard)."""
+        btn_size = 50
+        margin = 20
+        spacing = 15
         
-        # Subtitle
-        subtitle_font = pygame.font.Font(None, 28)
-        subtitle = subtitle_font.render("A Manga Puzzle Adventure", True, (200, 180, 220))
-        self._screen.blit(subtitle, ((width - subtitle.get_width()) // 2, title_y + 75))
+        # Leaderboard button (above options)
+        lb_x = margin
+        lb_y = height - margin - btn_size * 2 - spacing
+        self._leaderboard_btn_rect = pygame.Rect(lb_x, lb_y, btn_size, btn_size)
+        
+        # Options button (bottom left)
+        opt_x = margin
+        opt_y = height - margin - btn_size
+        self._options_btn_rect = pygame.Rect(opt_x, opt_y, btn_size, btn_size)
+        
+        mouse_pos = pygame.mouse.get_pos()
+        
+        # Draw leaderboard button
+        lb_hovered = self._leaderboard_btn_rect.collidepoint(mouse_pos)
+        self._draw_icon_button(self._leaderboard_btn_rect, "🏆", lb_hovered, (255, 200, 100))
+        
+        # Draw options button
+        opt_hovered = self._options_btn_rect.collidepoint(mouse_pos)
+        self._draw_icon_button(self._options_btn_rect, "⚙", opt_hovered, (150, 180, 255))
+    
+    def _draw_icon_button(self, rect: pygame.Rect, icon: str, is_hovered: bool, 
+                          accent: Tuple[int, int, int]) -> None:
+        """Draw a small icon button."""
+        if is_hovered:
+            bg_color = (55, 50, 75)
+            border_color = accent
+            # Glow
+            glow_rect = rect.inflate(10, 10)
+            glow = pygame.Surface((glow_rect.width, glow_rect.height), pygame.SRCALPHA)
+            pygame.draw.rect(glow, (*accent, 25), glow.get_rect(), border_radius=15)
+            self._screen.blit(glow, glow_rect.topleft)
+        else:
+            bg_color = (40, 38, 55)
+            border_color = (70, 65, 90)
+        
+        pygame.draw.rect(self._screen, bg_color, rect, border_radius=10)
+        pygame.draw.rect(self._screen, border_color, rect, 2, border_radius=10)
+        
+        # Draw icon (using simple text symbols for now - user can replace with actual icons)
+        font = pygame.font.Font(None, 32)
+        icon_surf = font.render(icon, True, accent if is_hovered else (180, 175, 200))
+        icon_x = rect.x + (rect.width - icon_surf.get_width()) // 2
+        icon_y = rect.y + (rect.height - icon_surf.get_height()) // 2
+        self._screen.blit(icon_surf, (icon_x, icon_y))
     
     def _draw_center_buttons(self, width: int, height: int) -> None:
-        """Draw the main center buttons."""
+        """Draw the main center buttons (Play and Exit)."""
         btn_width = 240
         btn_height = 55
         btn_spacing = 20
-        start_y = height // 2 - 30
+        start_y = height // 2 + 30  # Lower to make room for logo
         center_x = width // 2
         
         buttons = [
-            ("PLAY", "play"),
-            ("OPTIONS", "options"),
-            ("EXIT", "exit"),
+            ("PLAY", "play", (100, 180, 255)),
+            ("EXIT", "exit", (180, 100, 100)),
         ]
         
-        for i, (text, btn_id) in enumerate(buttons):
+        for i, (text, btn_id, accent) in enumerate(buttons):
             y = start_y + i * (btn_height + btn_spacing)
             rect = pygame.Rect(center_x - btn_width // 2, y, btn_width, btn_height)
             
-            # Store rect for click detection
             if btn_id == "play":
                 self._play_btn_rect = rect
-            elif btn_id == "options":
-                self._options_btn_rect = rect
             elif btn_id == "exit":
                 self._exit_btn_rect = rect
             
-            # Check hover
             mouse_pos = pygame.mouse.get_pos()
             is_hovered = rect.collidepoint(mouse_pos)
             
-            # Draw button with manga-style
-            self._draw_manga_button(rect, text, is_hovered, 
-                                   accent=(255, 150, 200) if btn_id == "play" else None)
+            self._draw_modern_button(rect, text, is_hovered, accent)
     
-    def _draw_manga_button(self, rect: pygame.Rect, text: str, is_hovered: bool,
-                          accent: Tuple[int, int, int] = None) -> None:
-        """Draw a manga-style button."""
-        # Base colors
+    def _draw_modern_button(self, rect: pygame.Rect, text: str, is_hovered: bool,
+                           accent: Tuple[int, int, int]) -> None:
+        """Draw a modern styled button."""
         if is_hovered:
-            bg_color = (60, 50, 80)
-            border_color = accent or (200, 180, 255)
-        else:
-            bg_color = (40, 35, 55)
-            border_color = (80, 70, 100)
-        
-        # Glow effect on hover
-        if is_hovered:
-            glow_rect = rect.inflate(12, 12)
+            bg_color = (55, 50, 75)
+            border_color = accent
+            # Glow effect
+            glow_rect = rect.inflate(14, 14)
             glow = pygame.Surface((glow_rect.width, glow_rect.height), pygame.SRCALPHA)
-            glow_color = accent or (200, 150, 255)
-            pygame.draw.rect(glow, (*glow_color, 30), glow.get_rect(), border_radius=18)
+            pygame.draw.rect(glow, (*accent, 30), glow.get_rect(), border_radius=18)
             self._screen.blit(glow, glow_rect.topleft)
+        else:
+            bg_color = (40, 38, 55)
+            border_color = (70, 65, 90)
         
-        # Main button
         pygame.draw.rect(self._screen, bg_color, rect, border_radius=12)
         pygame.draw.rect(self._screen, border_color, rect, 2, border_radius=12)
         
-        # Text
         font = pygame.font.Font(None, 36)
-        text_color = (255, 255, 255) if is_hovered else (200, 190, 220)
+        text_color = (255, 255, 255) if is_hovered else (200, 195, 215)
         text_surf = font.render(text, True, text_color)
         text_x = rect.x + (rect.width - text_surf.get_width()) // 2
         text_y = rect.y + (rect.height - text_surf.get_height()) // 2
         self._screen.blit(text_surf, (text_x, text_y))
     
     def _draw_play_submenu(self, width: int, height: int) -> None:
-        """Draw the play submenu that appears on hover."""
+        """Draw the play submenu that appears on click."""
         if self._submenu_anim < 0.01:
             return
         
@@ -880,13 +956,12 @@ class MainMenu(Menu):
         offset_x = int(30 * (1.0 - self._submenu_anim))
         alpha = int(255 * self._submenu_anim)
         
-        # Draw submenu panel
         panel_rect = pygame.Rect(submenu_x + offset_x, submenu_y, item_width, item_height * 2 + 20)
         
         # Panel background
         panel = pygame.Surface((panel_rect.width, panel_rect.height), pygame.SRCALPHA)
-        pygame.draw.rect(panel, (35, 30, 50, alpha), panel.get_rect(), border_radius=10)
-        pygame.draw.rect(panel, (100, 80, 140, alpha), panel.get_rect(), 2, border_radius=10)
+        pygame.draw.rect(panel, (35, 32, 50, alpha), panel.get_rect(), border_radius=10)
+        pygame.draw.rect(panel, (80, 100, 150, alpha), panel.get_rect(), 2, border_radius=10)
         self._screen.blit(panel, panel_rect.topleft)
         
         # Draw items
@@ -956,8 +1031,8 @@ class MainMenu(Menu):
         else:
             self._draw_default_avatar(avatar_x, avatar_y, avatar_size)
         
-        # Accent ring
-        pygame.draw.circle(self._screen, (255, 150, 200), 
+        # Accent ring - modern blue
+        pygame.draw.circle(self._screen, (100, 180, 255), 
                           (avatar_x + avatar_size // 2, avatar_y + avatar_size // 2), 
                           avatar_size // 2 + 3, 3)
         
@@ -975,68 +1050,102 @@ class MainMenu(Menu):
         mouse_pos = pygame.mouse.get_pos()
         is_hovered = self._switch_player_rect.collidepoint(mouse_pos)
         
-        btn_color = (60, 50, 80) if is_hovered else (45, 40, 60)
+        btn_color = (55, 50, 75) if is_hovered else (42, 40, 58)
         pygame.draw.rect(self._screen, btn_color, self._switch_player_rect, border_radius=8)
+        if is_hovered:
+            pygame.draw.rect(self._screen, (100, 140, 200), self._switch_player_rect, 1, border_radius=8)
         
         font_btn = pygame.font.Font(None, 22)
-        btn_text = font_btn.render("Switch Player", True, (180, 170, 200))
+        btn_text = font_btn.render("Switch Player", True, (180, 175, 205))
         btn_text_x = self._switch_player_rect.x + (self._switch_player_rect.width - btn_text.get_width()) // 2
         self._screen.blit(btn_text, (btn_text_x, btn_y + 7))
     
     def _draw_default_avatar(self, x: int, y: int, size: int) -> None:
         """Draw a default avatar icon."""
-        pygame.draw.circle(self._screen, (70, 60, 100), (x + size // 2, y + size // 2), size // 2)
+        pygame.draw.circle(self._screen, (60, 55, 85), (x + size // 2, y + size // 2), size // 2)
         # Simple user icon
         font = pygame.font.Font(None, size // 2)
         icon = font.render("?", True, (150, 140, 180))
         self._screen.blit(icon, (x + (size - icon.get_width()) // 2, y + (size - icon.get_height()) // 2))
     
     def _draw_how_to_play(self, width: int, height: int) -> None:
-        """Draw the How To Play panel on the right."""
-        panel_width = 220
-        panel_height = 320
+        """Draw the How To Play panel with visual key buttons."""
+        panel_width = 240
+        panel_height = 350
         panel_x = width - panel_width - 40
-        panel_y = height // 2 - 130
+        panel_y = height // 2 - 150
         
         # Panel background
         panel_rect = pygame.Rect(panel_x, panel_y, panel_width, panel_height)
-        pygame.draw.rect(self._screen, (30, 25, 45), panel_rect, border_radius=15)
-        pygame.draw.rect(self._screen, (70, 60, 90), panel_rect, 2, border_radius=15)
+        pygame.draw.rect(self._screen, (30, 28, 45), panel_rect, border_radius=15)
+        pygame.draw.rect(self._screen, (70, 65, 90), panel_rect, 2, border_radius=15)
         
         # Title
         font_title = pygame.font.Font(None, 26)
-        title = font_title.render("HOW TO PLAY", True, (180, 160, 200))
+        title = font_title.render("HOW TO PLAY", True, (180, 175, 210))
         self._screen.blit(title, (panel_x + (panel_width - title.get_width()) // 2, panel_y + 15))
         
-        # Controls list with visual keys
+        # Controls with visual key representations
         controls = [
-            ("← →", "Move"),
-            ("↓", "Soft Drop"),
-            ("SPACE", "Hard Drop"),
-            ("↑ / W", "Rotate"),
-            ("Z", "Rotate CCW"),
-            ("C", "Hold"),
-            ("ESC", "Pause"),
+            (["←", "→"], "Move"),
+            (["↓"], "Soft Drop"),
+            (["SPACE"], "Hard Drop"),
+            (["↑"], "Rotate CW"),
+            (["Z"], "Rotate CCW"),
+            (["C"], "Hold"),
+            (["ESC"], "Pause"),
         ]
         
-        font_key = pygame.font.Font(None, 22)
         font_action = pygame.font.Font(None, 20)
-        
         y = panel_y + 50
-        for key, action in controls:
-            # Key box
-            key_surf = font_key.render(key, True, (255, 255, 255))
-            key_width = max(50, key_surf.get_width() + 16)
-            key_rect = pygame.Rect(panel_x + 15, y, key_width, 28)
-            pygame.draw.rect(self._screen, (50, 45, 70), key_rect, border_radius=6)
-            pygame.draw.rect(self._screen, (90, 80, 110), key_rect, 1, border_radius=6)
-            self._screen.blit(key_surf, (key_rect.x + (key_width - key_surf.get_width()) // 2, y + 6))
+        
+        for keys, action in controls:
+            # Draw visual key boxes
+            key_x = panel_x + 15
+            for key in keys:
+                key_width = self._draw_visual_key(key_x, y, key)
+                key_x += key_width + 5
             
-            # Action text
-            action_surf = font_action.render(action, True, (170, 160, 190))
-            self._screen.blit(action_surf, (panel_x + 15 + key_width + 10, y + 6))
+            # Draw action text
+            action_surf = font_action.render(action, True, (170, 165, 195))
+            self._screen.blit(action_surf, (panel_x + 110, y + 6))
             
-            y += 36
+            y += 40
+    
+    def _draw_visual_key(self, x: int, y: int, key: str) -> int:
+        """Draw a visual keyboard key and return its width."""
+        font = pygame.font.Font(None, 20)
+        key_surf = font.render(key, True, (255, 255, 255))
+        
+        # Calculate key size
+        padding = 8
+        key_width = max(30, key_surf.get_width() + padding * 2)
+        key_height = 28
+        
+        # Draw key background (3D effect)
+        key_rect = pygame.Rect(x, y, key_width, key_height)
+        
+        # Shadow
+        shadow_rect = key_rect.copy()
+        shadow_rect.y += 3
+        pygame.draw.rect(self._screen, (25, 25, 35), shadow_rect, border_radius=5)
+        
+        # Main key
+        pygame.draw.rect(self._screen, (55, 52, 75), key_rect, border_radius=5)
+        
+        # Top highlight
+        highlight_rect = pygame.Rect(x + 2, y + 2, key_width - 4, key_height // 3)
+        pygame.draw.rect(self._screen, (70, 67, 95), highlight_rect, border_radius=3)
+        
+        # Border
+        pygame.draw.rect(self._screen, (85, 80, 110), key_rect, 1, border_radius=5)
+        
+        # Text
+        text_x = x + (key_width - key_surf.get_width()) // 2
+        text_y = y + (key_height - key_surf.get_height()) // 2
+        self._screen.blit(key_surf, (text_x, text_y))
+        
+        return key_width
     
     def _draw_tooltip(self) -> None:
         """Draw manga-style speech bubble tooltip."""

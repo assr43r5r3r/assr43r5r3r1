@@ -1,12 +1,12 @@
-# Blokkun - A Manga Puzzle Adventure
+# BlockFall - A Modern Puzzle Experience
 
-A polished, manga-style Tetris clone built with Python and pygame-ce, featuring anime aesthetics, smooth animations, particles, sound effects, screen shake, and a clean multi-file architecture.
+A polished Tetris clone built with Python and pygame-ce, featuring modern aesthetics, smooth animations, particles, sound effects, screen shake, and a clean multi-file architecture.
 
 ## Features
 
-### Manga/Anime Theme
-- **8 Beautiful Themes**: Anime, Kawaii, Manga B&W, Neon Anime, Shonen, Shojo, Retro Anime, Mecha
-- **Manga-style UI**: Speech bubble tooltips, stylized menus, anime-inspired visuals
+### Modern Visual Themes
+- **10 Beautiful Themes**: Classic, Neon, Ocean, Forest, Sunset, Midnight, Monochrome, Retro, Cherry, Ice
+- **Each theme changes the entire game**: Background, UI colors, block colors, glow effects
 - **Loading Screen**: Animated loading screen with falling blocks
 
 ### Core Gameplay
@@ -28,7 +28,7 @@ A polished, manga-style Tetris clone built with Python and pygame-ce, featuring 
 
 ### Player System
 - **Player Profiles**: Create and switch between players
-- **Avatar Support**: Upload custom avatars or use defaults
+- **10 Avatar Slots**: Select from default avatars or leave empty
 - **Leaderboard**: Track high scores (one entry per player, best score only)
 - **Auto-save**: Progress saved automatically
 
@@ -38,6 +38,8 @@ A polished, manga-style Tetris clone built with Python and pygame-ce, featuring 
 - Screen shake on big clears
 - Line clear animations (flash/fade effects)
 - Countdown animation before game start ("3, 2, 1, GO!")
+- Falling blocks background on main menu
+- Visual keyboard key representations in How To Play panel
 
 ### Audio
 - Sound effects for all game events
@@ -54,8 +56,8 @@ A polished, manga-style Tetris clone built with Python and pygame-ce, featuring 
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-repo/blokkun.git
-cd blokkun
+git clone https://github.com/your-repo/blockfall.git
+cd blockfall
 
 # Install dependencies
 pip install -r requirements.txt
@@ -83,30 +85,45 @@ To add custom avatar images:
 
 1. Create a folder: `assets/avatars/`
 2. Add PNG images (recommended size: 128x128 or larger, square)
-3. Name them: `avatar_1.png`, `avatar_2.png`, `avatar_3.png`, `avatar_4.png`
-4. Players can select these when creating profiles, or upload their own
+3. Name them sequentially: `1.png`, `2.png`, `3.png`, ... up to `10.png`
+4. Players can select these when creating profiles
 
 Example folder structure:
 ```
 assets/
 └── avatars/
-    ├── avatar_1.png  # Cute anime character
-    ├── avatar_2.png  # Cool protagonist
-    ├── avatar_3.png  # Chibi character
-    └── avatar_4.png  # Mysterious character
+    ├── 1.png   # First avatar option
+    ├── 2.png   # Second avatar option
+    ├── 3.png   # Third avatar option
+    ├── 4.png   # Fourth avatar option
+    ├── 5.png   # Fifth avatar option
+    ├── 6.png   # Sixth avatar option
+    ├── 7.png   # Seventh avatar option
+    ├── 8.png   # Eighth avatar option
+    ├── 9.png   # Ninth avatar option
+    └── 10.png  # Tenth avatar option
 ```
+
+## Adding Custom Icons (Optional)
+
+You can provide custom icon images for the Options and Leaderboard buttons:
+
+1. Options icon: `assets/icons/options.png` (32x32 recommended)
+2. Leaderboard icon: `assets/icons/leaderboard.png` (32x32 recommended)
+
+If icons are not provided, the game will display text symbols as fallback.
 
 ## Project Structure
 
 ```
-blokkun/
+blockfall/
 ├── main.py              # Application entry point
 ├── settings.py          # Global configuration
 ├── requirements.txt     # Python dependencies
 ├── README.md           # This file
 ├── STORY_MODE.md       # Story mode documentation
 ├── assets/
-│   └── avatars/        # Avatar images
+│   └── avatars/        # Avatar images (1.png through 10.png)
 └── src/
     ├── engine/         # Game loop, timing, configuration
     ├── tetris/         # Core game logic
@@ -141,7 +158,7 @@ To compile to .exe on Windows:
 
 ```bash
 pip install pyinstaller
-pyinstaller --onefile --windowed --name Blokkun main.py
+pyinstaller --onefile --windowed --name BlockFall main.py
 ```
 
 The executable will be in the `dist/` folder.

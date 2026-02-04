@@ -183,20 +183,23 @@ class LoadingScreen:
             self._screen.blit(rotated, rect)
     
     def _draw_title(self) -> None:
-        """Draw game title with glow effect."""
+        """Draw game title with glow effect and decorative blocks."""
         # Calculate title position with subtle animation
         title_y = self._height // 3 + int(math.sin(self._time * 2) * 5)
         
-        # Draw glow layers
+        # Draw glow layers - modern blue/cyan glow
         glow_colors = [
-            (255, 150, 200, 20),
-            (255, 180, 220, 30),
-            (255, 200, 230, 40),
+            (100, 180, 255, 20),
+            (120, 200, 255, 30),
+            (150, 220, 255, 40),
         ]
         
         title_text = self._game_name.upper()
         title_surf = self._font_title.render(title_text, True, (255, 255, 255))
         title_x = (self._width - title_surf.get_width()) // 2
+        
+        # Draw decorative blocks around title
+        self._draw_title_blocks(title_x, title_y, title_surf.get_width(), title_surf.get_height())
         
         # Draw glow
         for i, color in enumerate(glow_colors):
@@ -208,12 +211,37 @@ class LoadingScreen:
         
         # Draw main title
         self._screen.blit(title_surf, (title_x, title_y))
+    
+    def _draw_title_blocks(self, title_x: int, title_y: int, title_width: int, title_height: int) -> None:
+        """Draw decorative blocks around the title."""
+        # Colors for decorative blocks
+        block_colors = [
+            (100, 200, 255),  # Cyan
+            (100, 255, 200),  # Green-cyan
+            (200, 150, 255),  # Purple
+            (255, 200, 100),  # Yellow
+        ]
         
-        # Draw subtitle
-        subtitle_text = "A Manga Puzzle Adventure"
-        subtitle_surf = self._font_subtitle.render(subtitle_text, True, (200, 180, 220))
-        subtitle_x = (self._width - subtitle_surf.get_width()) // 2
-        self._screen.blit(subtitle_surf, (subtitle_x, title_y + 80))
+        # Draw small decorative blocks around title
+        block_size = 20
+        positions = [
+            (title_x - 50, title_y - 10),
+            (title_x - 30, title_y + 30),
+            (title_x + title_width + 20, title_y - 5),
+            (title_x + title_width + 35, title_y + 25),
+            (title_x - 20, title_y + title_height + 20),
+            (title_x + title_width + 10, title_y + title_height + 15),
+        ]
+        
+        for i, (bx, by) in enumerate(positions):
+            color = block_colors[i % len(block_colors)]
+            # Animate position slightly
+            offset = math.sin(self._time * 2 + i * 0.5) * 3
+            s = pygame.Surface((block_size, block_size), pygame.SRCALPHA)
+            pygame.draw.rect(s, (*color, 120), s.get_rect(), border_radius=4)
+            # Add highlight
+            pygame.draw.line(s, (*[min(255, c + 50) for c in color], 80), (2, 2), (block_size - 2, 2), 2)
+            self._screen.blit(s, (bx, by + offset))
     
     def _draw_loading_bar(self) -> None:
         """Draw loading progress bar."""

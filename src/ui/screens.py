@@ -3,17 +3,25 @@ Name entry and profile screens.
 """
 
 import os
-from typing import Optional, Callable
+import math
+from typing import Optional, Callable, List
 
 try:
     import pygame
 except ImportError:
     import pygame_ce as pygame
 
+from settings import AVATAR_DIRECTORY, DEFAULT_AVATARS
+
 
 class NameEntryScreen:
     """
-    Screen for entering player name and optionally selecting avatar.
+    Screen for entering player name and selecting avatar.
+    
+    Features:
+    - "Add Player" title
+    - "Enter Your Name" animated placeholder
+    - 10 avatar selection slots
     """
     
     MAX_NAME_LENGTH = 12
@@ -26,27 +34,50 @@ class NameEntryScreen:
         
         pygame.font.init()
         self._font_title = pygame.font.Font(None, 56)
-        self._font_input = pygame.font.Font(None, 48)
-        self._font_hint = pygame.font.Font(None, 28)
-        self._font_button = pygame.font.Font(None, 36)
+        self._font_input = pygame.font.Font(None, 42)
+        self._font_hint = pygame.font.Font(None, 24)
+        self._font_button = pygame.font.Font(None, 32)
+        self._font_label = pygame.font.Font(None, 20)
         
         self._active = False
         self._name = ""
         self._cursor_blink = 0.0
-        self._avatar_path: Optional[str] = None
-        self._avatar_surface: Optional[pygame.Surface] = None
+        self._input_focused = False  # For animated placeholder
+        self._label_anim = 0.0  # Animation for floating label
+        self._time = 0.0
+        
+        # Avatar selection
+        self._selected_avatar_idx = -1  # -1 = no selection (default)
+        self._avatar_surfaces: List[Optional[pygame.Surface]] = []
+        self._avatar_rects: List[pygame.Rect] = []
+        self._load_default_avatars()
         
         self._on_confirm: Optional[Callable[[str, Optional[str]], None]] = None
         self._on_cancel: Optional[Callable] = None
         self._play_sound: Optional[Callable[[str], None]] = None
         
         # UI state
-        self._selected_button = 0  # 0=confirm, 1=avatar, 2=cancel
+        self._selected_button = 0  # 0=confirm, 1=cancel
         
-        # Button rects
+        # Rects
+        self._input_rect = pygame.Rect(0, 0, 0, 0)
         self._confirm_rect = pygame.Rect(0, 0, 0, 0)
-        self._avatar_rect = pygame.Rect(0, 0, 0, 0)
         self._cancel_rect = pygame.Rect(0, 0, 0, 0)
+    
+    def _load_default_avatars(self) -> None:
+        """Load default avatar images."""
+        self._avatar_surfaces = []
+        for avatar_name in DEFAULT_AVATARS:
+            path = os.path.join(AVATAR_DIRECTORY, avatar_name)
+            if os.path.exists(path):
+                try:
+                    img = pygame.image.load(path)
+                    img = pygame.transform.smoothscale(img, (50, 50))
+                    self._avatar_surfaces.append(img)
+                except Exception:
+                    self._avatar_surfaces.append(None)
+            else:
+                self._avatar_surfaces.append(None)
     
     def set_sound_callback(self, callback: Callable[[str], None]) -> None:
         self._play_sound = callback
@@ -64,6 +95,9 @@ class NameEntryScreen:
         self._on_cancel = on_cancel
         self._selected_button = 0
         self._cursor_blink = 0.0
+        self._input_focused = len(initial_name) > 0
+        self._label_anim = 1.0 if len(initial_name) > 0 else 0.0
+        self._selected_avatar_idx = -1
     
     def hide(self) -> None:
         """Hide screen."""
@@ -71,9 +105,14 @@ class NameEntryScreen:
     
     def update(self, dt: float) -> None:
         """Update animations."""
+        self._time += dt
         self._cursor_blink += dt
         if self._cursor_blink > 1.0:
             self._cursor_blink -= 1.0
+        
+        # Animate label floating up
+        target = 1.0 if (self._input_focused or len(self._name) > 0) else 0.0
+        self._label_anim += (target - self._label_anim) * min(1.0, dt * 10)
     
     def handle_event(self, event: pygame.event.Event) -> bool:
         """Handle input events."""
@@ -89,8 +128,11 @@ class NameEntryScreen:
             
             elif event.key == pygame.K_RETURN:
                 if len(self._name.strip()) > 0:
+                    avatar_path = None
+                    if 0 <= self._selected_avatar_idx < len(DEFAULT_AVATARS):
+                        avatar_path = os.path.join(AVATAR_DIRECTORY, DEFAULT_AVATARS[self._selected_avatar_idx])
                     if self._on_confirm:
-                        self._on_confirm(self._name.strip(), self._avatar_path)
+                        self._on_confirm(self._name.strip(), avatar_path)
                     self._active = False
                     if self._play_sound:
                         self._play_sound("menu_select")
@@ -102,7 +144,7 @@ class NameEntryScreen:
                 return True
             
             elif event.key == pygame.K_TAB:
-                self._selected_button = (self._selected_button + 1) % 3
+                self._selected_button = (self._selected_button + 1) % 2
                 if self._play_sound:
                     self._play_sound("menu_move")
                 return True
@@ -111,23 +153,40 @@ class NameEntryScreen:
                 if len(self._name) < self.MAX_NAME_LENGTH:
                     if event.unicode.isalnum() or event.unicode in " _-":
                         self._name += event.unicode
+                        self._input_focused = True
                 return True
         
         elif event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 1:
                 pos = event.pos
+                
+                # Check input box click
+                if self._input_rect.collidepoint(pos):
+                    self._input_focused = True
+                    return True
+                
+                # Check avatar clicks
+                for i, rect in enumerate(self._avatar_rects):
+                    if rect.collidepoint(pos):
+                        self._selected_avatar_idx = i if self._selected_avatar_idx != i else -1
+                        if self._play_sound:
+                            self._play_sound("menu_move")
+                        return True
+                
+                # Check button clicks
                 if self._confirm_rect.collidepoint(pos):
                     if len(self._name.strip()) > 0:
+                        avatar_path = None
+                        if 0 <= self._selected_avatar_idx < len(DEFAULT_AVATARS):
+                            avatar_path = os.path.join(AVATAR_DIRECTORY, DEFAULT_AVATARS[self._selected_avatar_idx])
                         if self._on_confirm:
-                            self._on_confirm(self._name.strip(), self._avatar_path)
+                            self._on_confirm(self._name.strip(), avatar_path)
                         self._active = False
                         if self._play_sound:
                             self._play_sound("menu_select")
                     return True
-                elif self._avatar_rect.collidepoint(pos):
-                    self._open_file_dialog()
-                    return True
-                elif self._cancel_rect.collidepoint(pos):
+                
+                if self._cancel_rect.collidepoint(pos):
                     if self._on_cancel:
                         self._on_cancel()
                     self._active = False
@@ -137,50 +196,10 @@ class NameEntryScreen:
             pos = event.pos
             if self._confirm_rect.collidepoint(pos):
                 self._selected_button = 0
-            elif self._avatar_rect.collidepoint(pos):
-                self._selected_button = 1
             elif self._cancel_rect.collidepoint(pos):
-                self._selected_button = 2
+                self._selected_button = 1
         
         return False
-    
-    def _open_file_dialog(self) -> None:
-        """Open file dialog for avatar selection."""
-        # Note: This is a simplified version. In a full implementation,
-        # you might use tkinter.filedialog or a custom file browser
-        try:
-            import tkinter as tk
-            from tkinter import filedialog
-            
-            root = tk.Tk()
-            root.withdraw()
-            
-            file_path = filedialog.askopenfilename(
-                title="Select Avatar Image",
-                filetypes=[
-                    ("Image files", "*.png *.jpg *.jpeg *.gif *.bmp"),
-                    ("All files", "*.*")
-                ]
-            )
-            
-            root.destroy()
-            
-            if file_path:
-                self._load_avatar(file_path)
-        except Exception:
-            # Fallback if tkinter not available
-            pass
-    
-    def _load_avatar(self, path: str) -> bool:
-        """Load avatar from file."""
-        try:
-            img = pygame.image.load(path)
-            # Scale to 64x64
-            self._avatar_surface = pygame.transform.smoothscale(img, (64, 64))
-            self._avatar_path = path
-            return True
-        except Exception:
-            return False
     
     def draw(self) -> None:
         """Draw name entry screen."""
@@ -188,22 +207,73 @@ class NameEntryScreen:
             return
         
         # Background
-        self._screen.fill((15, 15, 25))
+        self._draw_background()
         
-        # Title
-        title = self._font_title.render("Enter Your Name", True, (100, 200, 255))
+        # Title - "Add Player"
+        title = self._font_title.render("Add Player", True, (100, 180, 255))
         title_x = (self._width - title.get_width()) // 2
-        self._screen.blit(title, (title_x, 100))
+        self._screen.blit(title, (title_x, 60))
         
-        # Name input box
+        # Name input section
+        self._draw_name_input()
+        
+        # Avatar selection section
+        self._draw_avatar_selection()
+        
+        # Buttons
+        self._draw_buttons()
+    
+    def _draw_background(self) -> None:
+        """Draw gradient background."""
+        for y in range(self._height):
+            progress = y / self._height
+            r = int(15 + progress * 10)
+            g = int(15 + progress * 8)
+            b = int(25 + progress * 15)
+            pygame.draw.line(self._screen, (r, g, b), (0, y), (self._width, y))
+        
+        # Subtle grid
+        for x in range(0, self._width, 50):
+            for y in range(0, self._height, 50):
+                s = pygame.Surface((48, 48), pygame.SRCALPHA)
+                s.fill((35, 35, 50, 8))
+                self._screen.blit(s, (x + 1, y + 1))
+    
+    def _draw_name_input(self) -> None:
+        """Draw name input box with animated placeholder."""
         input_width = 400
-        input_height = 60
+        input_height = 55
         input_x = (self._width - input_width) // 2
-        input_y = 200
+        input_y = 160
         
-        input_rect = pygame.Rect(input_x, input_y, input_width, input_height)
-        pygame.draw.rect(self._screen, (30, 30, 50), input_rect, border_radius=10)
-        pygame.draw.rect(self._screen, (80, 120, 180), input_rect, 3, border_radius=10)
+        self._input_rect = pygame.Rect(input_x, input_y, input_width, input_height)
+        
+        # Input box
+        pygame.draw.rect(self._screen, (35, 32, 50), self._input_rect, border_radius=10)
+        border_color = (100, 180, 255) if self._input_focused else (70, 65, 90)
+        pygame.draw.rect(self._screen, border_color, self._input_rect, 2, border_radius=10)
+        
+        # Floating label / placeholder
+        placeholder = "Enter Your Name"
+        if self._label_anim > 0.01:
+            # Floating label (above input)
+            label_y = input_y - 12 - int(15 * self._label_anim)
+            label_size = int(20 + 4 * (1 - self._label_anim))
+            label_font = pygame.font.Font(None, label_size)
+            label_color = (
+                int(100 + 80 * self._label_anim),
+                int(140 + 40 * self._label_anim),
+                int(200 + 55 * self._label_anim)
+            )
+            label = label_font.render(placeholder, True, label_color)
+            self._screen.blit(label, (input_x + 15, label_y))
+        
+        if self._label_anim < 0.99 and len(self._name) == 0:
+            # Placeholder inside input
+            alpha = int(180 * (1 - self._label_anim))
+            placeholder_surf = self._font_input.render(placeholder, True, (100, 95, 120))
+            placeholder_surf.set_alpha(alpha)
+            self._screen.blit(placeholder_surf, (input_x + 15, input_y + 10))
         
         # Name text with cursor
         display_name = self._name
@@ -211,86 +281,106 @@ class NameEntryScreen:
             display_name += "|"
         
         name_surf = self._font_input.render(display_name, True, (255, 255, 255))
-        name_x = input_x + 20
-        name_y = input_y + (input_height - name_surf.get_height()) // 2
-        self._screen.blit(name_surf, (name_x, name_y))
+        self._screen.blit(name_surf, (input_x + 15, input_y + 10))
         
-        # Hint
-        hint = self._font_hint.render(
-            f"Max {self.MAX_NAME_LENGTH} characters. Press ENTER to confirm.",
-            True, (120, 120, 140)
-        )
-        hint_x = (self._width - hint.get_width()) // 2
-        self._screen.blit(hint, (hint_x, input_y + input_height + 15))
+        # Character count
+        count_text = f"{len(self._name)}/{self.MAX_NAME_LENGTH}"
+        count_surf = self._font_label.render(count_text, True, (120, 115, 140))
+        self._screen.blit(count_surf, (input_x + input_width - count_surf.get_width() - 10, input_y + input_height + 5))
+    
+    def _draw_avatar_selection(self) -> None:
+        """Draw avatar selection grid."""
+        section_y = 260
         
-        # Avatar section
-        avatar_section_y = 320
-        avatar_label = self._font_hint.render("Profile Picture (optional)", True, (150, 150, 170))
-        self._screen.blit(avatar_label, ((self._width - avatar_label.get_width()) // 2, avatar_section_y))
+        # Section label
+        label = self._font_hint.render("Choose an Avatar (optional)", True, (160, 155, 185))
+        label_x = (self._width - label.get_width()) // 2
+        self._screen.blit(label, (label_x, section_y))
         
-        # Avatar display/button
-        avatar_box_size = 80
-        avatar_box_x = (self._width - avatar_box_size) // 2
-        avatar_box_y = avatar_section_y + 35
+        # Avatar grid - 10 slots in 2 rows of 5
+        avatar_size = 55
+        spacing = 15
+        total_width = 5 * avatar_size + 4 * spacing
+        start_x = (self._width - total_width) // 2
+        start_y = section_y + 35
         
-        self._avatar_rect = pygame.Rect(avatar_box_x, avatar_box_y, avatar_box_size, avatar_box_size)
+        self._avatar_rects = []
         
-        if self._avatar_surface:
-            # Draw avatar
-            self._screen.blit(
-                pygame.transform.smoothscale(self._avatar_surface, (avatar_box_size, avatar_box_size)),
-                (avatar_box_x, avatar_box_y)
-            )
-        else:
-            pygame.draw.rect(self._screen, (40, 40, 60), self._avatar_rect, border_radius=10)
-            plus = self._font_title.render("+", True, (100, 100, 120))
-            self._screen.blit(
-                plus,
-                (avatar_box_x + (avatar_box_size - plus.get_width()) // 2,
-                 avatar_box_y + (avatar_box_size - plus.get_height()) // 2)
-            )
-        
-        if self._selected_button == 1:
-            pygame.draw.rect(self._screen, (100, 180, 255), self._avatar_rect, 3, border_radius=10)
-        else:
-            pygame.draw.rect(self._screen, (60, 60, 80), self._avatar_rect, 2, border_radius=10)
-        
-        # Buttons
-        btn_width = 150
-        btn_height = 50
-        btn_y = 480
+        for i in range(10):
+            row = i // 5
+            col = i % 5
+            
+            x = start_x + col * (avatar_size + spacing)
+            y = start_y + row * (avatar_size + spacing)
+            
+            rect = pygame.Rect(x, y, avatar_size, avatar_size)
+            self._avatar_rects.append(rect)
+            
+            # Background
+            is_selected = self._selected_avatar_idx == i
+            bg_color = (60, 55, 80) if is_selected else (40, 38, 55)
+            pygame.draw.rect(self._screen, bg_color, rect, border_radius=10)
+            
+            # Avatar image or placeholder
+            if i < len(self._avatar_surfaces) and self._avatar_surfaces[i]:
+                # Draw avatar
+                avatar = self._avatar_surfaces[i]
+                self._screen.blit(avatar, (x + 2, y + 2))
+            else:
+                # Placeholder number
+                num_font = pygame.font.Font(None, 28)
+                num = num_font.render(str(i + 1), True, (90, 85, 110))
+                num_x = x + (avatar_size - num.get_width()) // 2
+                num_y = y + (avatar_size - num.get_height()) // 2
+                self._screen.blit(num, (num_x, num_y))
+            
+            # Selection border
+            if is_selected:
+                pygame.draw.rect(self._screen, (100, 180, 255), rect, 3, border_radius=10)
+            else:
+                pygame.draw.rect(self._screen, (70, 65, 90), rect, 1, border_radius=10)
+    
+    def _draw_buttons(self) -> None:
+        """Draw confirm and cancel buttons."""
+        btn_width = 140
+        btn_height = 48
+        btn_y = 440
         btn_spacing = 30
         
         total_width = btn_width * 2 + btn_spacing
         start_x = (self._width - total_width) // 2
         
+        mouse_pos = pygame.mouse.get_pos()
+        
         # Confirm button
         self._confirm_rect = pygame.Rect(start_x, btn_y, btn_width, btn_height)
-        confirm_color = (60, 160, 100) if self._selected_button == 0 else (40, 80, 60)
-        pygame.draw.rect(self._screen, confirm_color, self._confirm_rect, border_radius=10)
-        if self._selected_button == 0:
-            pygame.draw.rect(self._screen, (100, 220, 140), self._confirm_rect, 2, border_radius=10)
+        confirm_hovered = self._confirm_rect.collidepoint(mouse_pos) or self._selected_button == 0
+        
+        confirm_bg = (50, 100, 80) if confirm_hovered else (40, 70, 55)
+        pygame.draw.rect(self._screen, confirm_bg, self._confirm_rect, border_radius=10)
+        
+        if confirm_hovered:
+            pygame.draw.rect(self._screen, (100, 200, 150), self._confirm_rect, 2, border_radius=10)
         
         confirm_text = self._font_button.render("START", True, (255, 255, 255))
-        self._screen.blit(
-            confirm_text,
-            (self._confirm_rect.x + (btn_width - confirm_text.get_width()) // 2,
-             self._confirm_rect.y + (btn_height - confirm_text.get_height()) // 2)
-        )
+        text_x = self._confirm_rect.x + (btn_width - confirm_text.get_width()) // 2
+        text_y = self._confirm_rect.y + (btn_height - confirm_text.get_height()) // 2
+        self._screen.blit(confirm_text, (text_x, text_y))
         
         # Cancel button
         self._cancel_rect = pygame.Rect(start_x + btn_width + btn_spacing, btn_y, btn_width, btn_height)
-        cancel_color = (160, 60, 60) if self._selected_button == 2 else (80, 40, 40)
-        pygame.draw.rect(self._screen, cancel_color, self._cancel_rect, border_radius=10)
-        if self._selected_button == 2:
-            pygame.draw.rect(self._screen, (220, 100, 100), self._cancel_rect, 2, border_radius=10)
+        cancel_hovered = self._cancel_rect.collidepoint(mouse_pos) or self._selected_button == 1
+        
+        cancel_bg = (100, 50, 50) if cancel_hovered else (70, 40, 40)
+        pygame.draw.rect(self._screen, cancel_bg, self._cancel_rect, border_radius=10)
+        
+        if cancel_hovered:
+            pygame.draw.rect(self._screen, (200, 100, 100), self._cancel_rect, 2, border_radius=10)
         
         cancel_text = self._font_button.render("BACK", True, (255, 255, 255))
-        self._screen.blit(
-            cancel_text,
-            (self._cancel_rect.x + (btn_width - cancel_text.get_width()) // 2,
-             self._cancel_rect.y + (btn_height - cancel_text.get_height()) // 2)
-        )
+        text_x = self._cancel_rect.x + (btn_width - cancel_text.get_width()) // 2
+        text_y = self._cancel_rect.y + (btn_height - cancel_text.get_height()) // 2
+        self._screen.blit(cancel_text, (text_x, text_y))
     
     @property
     def is_active(self) -> bool:

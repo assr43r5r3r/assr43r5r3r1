@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
-Blokkun - A Manga-Style Puzzle Adventure
+BlockFall - A Modern Puzzle Experience
 
-A polished Tetris clone with pygame-ce featuring manga/anime aesthetics.
+A polished Tetris clone with pygame-ce featuring modern aesthetics.
 
 Features:
 - 25-stage system with increasing difficulty
 - Player profiles and leaderboard
 - Save/load system
-- Manga-style UI with animations
-- Multiple themes (Anime, Kawaii, Manga B&W, Neon, etc.)
+- Modern UI with smooth animations
+- Multiple visual themes
 - Loading screen and polished transitions
 
 Controls:
@@ -20,7 +20,7 @@ Controls:
 - C: Hold piece
 - Escape: Pause/Exit
 
-Author: Blokkun Project
+Author: BlockFall Project
 """
 
 import sys
@@ -191,14 +191,7 @@ class TetrisApp:
     def _on_loading_complete(self) -> None:
         """Called when loading screen finishes."""
         self._in_loading = False
-        
-        # Check if we need profile creation
-        if not self._save_manager.profiles.has_profiles:
-            self._waiting_for_profile = True
-            self._name_entry.show(
-                on_confirm=self._on_profile_created,
-                on_cancel=self._quit
-            )
+        # Don't show name entry on launch - will show when player clicks Play without a profile
     
     def _update_main_menu_player(self) -> None:
         """Update main menu with current player info."""
@@ -217,10 +210,11 @@ class TetrisApp:
     
     def _setup_menus(self) -> None:
         """Configure menu callbacks."""
-        # Main menu - updated for new manga-style structure
+        # Main menu - updated for modern style with leaderboard icon
         self._main_menu.set_callbacks(
             on_regular=self._request_regular_game,
             on_story=self._request_story_mode,
+            on_leaderboard=self._show_leaderboard,
             on_settings=self._open_settings_from_menu,
             on_quit=self._request_quit,
             on_switch_player=self._show_switch_player
@@ -608,10 +602,8 @@ class TetrisApp:
             pygame.display.set_window_position((new_x, new_y))
             return
         
-        # Handle loading screen - allow skipping with any key
+        # Handle loading screen - no skipping allowed
         if self._in_loading:
-            if event.type == pygame.KEYDOWN or event.type == pygame.MOUSEBUTTONDOWN:
-                self._loading_screen.skip()
             return
         
         # Handle confirm dialog first
