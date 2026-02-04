@@ -119,6 +119,8 @@ class Renderer:
         # Animation state
         self._line_clear_anim: List[Tuple[int, float]] = []  # [(row, progress), ...]
         self._lock_flash = 0.0
+        self._clearing_rows: List[int] = []  # Rows being cleared with animation
+        self._clear_anim_progress = 0.0  # 0 to 1
         
         # Visual settings
         self._show_ghost = True
@@ -268,7 +270,7 @@ class Renderer:
         pygame.draw.rect(self._screen, self._palette["ui_accent"], border_rect, 2)
     
     def _draw_board(self, board, offset_x: int, offset_y: int) -> None:
-        """Draw the locked pieces on the board."""
+        """Draw the locked pieces on the board with line clear animation."""
         hidden_rows = board.hidden_rows
         
         for y in range(board.total_height):
@@ -278,10 +280,50 @@ class Renderer:
                     # Only draw visible rows
                     visible_y = y - hidden_rows
                     if visible_y >= 0:
-                        self._draw_cell(
-                            x, visible_y, cell,
-                            offset_x, offset_y
-                        )
+                        # Check if this row is being cleared
+                        if y in self._clearing_rows:
+                            # Flash effect during clear animation:
+                            # - Fade out over animation progress (1.0 -> 0.0)
+                            # - Oscillate brightness with sin wave (20 = ~3 flashes during animation)
+                            # - 0.5 + 0.5*sin gives range [0, 1] for smooth pulsing
+                            fade = 1.0 - self._clear_anim_progress
+                            pulse = 0.5 + 0.5 * math.sin(self._clear_anim_progress * 20)
+                            alpha = int(255 * fade * pulse)
+                            self._draw_cell_with_alpha(
+                                x, visible_y, cell,
+                                offset_x, offset_y, alpha
+                            )
+                        else:
+                            self._draw_cell(
+                                x, visible_y, cell,
+                                offset_x, offset_y
+                            )
+    
+    def _draw_cell_with_alpha(
+        self,
+        grid_x: int,
+        grid_y: int,
+        piece_type: str,
+        offset_x: int = 0,
+        offset_y: int = 0,
+        alpha: int = 255
+    ) -> None:
+        """Draw a single cell with alpha transparency."""
+        surface = self._cell_surfaces.get(piece_type)
+        if surface:
+            px = self._grid_x + grid_x * self._cell_size + offset_x
+            py = self._grid_y + grid_y * self._cell_size + offset_y
+            
+            # Create a copy with alpha
+            cell_copy = surface.copy()
+            cell_copy.set_alpha(alpha)
+            self._screen.blit(cell_copy, (px, py))
+            
+            # Draw flash effect
+            if alpha > 100:
+                flash = pygame.Surface((self._cell_size, self._cell_size), pygame.SRCALPHA)
+                flash.fill((255, 255, 255, min(150, alpha // 2)))
+                self._screen.blit(flash, (px, py))
     
     def _draw_cell(
         self, 
@@ -399,14 +441,13 @@ class Renderer:
             pygame.draw.rect(self._screen, color, rect)
     
     def _draw_stats(self, game: TetrisGame) -> None:
-        """Draw score and stats."""
+        """Draw score and stats without level (stage is shown separately)."""
         x = self._grid_x - 140
         y = self._grid_y + 150
         
         stats = [
             ("SCORE", f"{game.score:,}"),
             ("LINES", str(game.lines)),
-            ("LEVEL", str(game.level)),
         ]
         
         if game.combo > 0:
@@ -462,6 +503,13 @@ class Renderer:
             dt: Delta time in seconds
         """
         self._particles.update(dt)
+        
+        # Update line clear animation
+        if self._clearing_rows:
+            self._clear_anim_progress += dt * 4  # Animation takes 0.25 seconds
+            if self._clear_anim_progress >= 1.0:
+                self._clearing_rows = []
+                self._clear_anim_progress = 0.0
     
     def trigger_line_clear(self, lines: int, rows: List[int], 
                            colors: List[Tuple[int, int, int]] = None) -> None:
@@ -473,6 +521,10 @@ class Renderer:
             rows: List of row indices cleared
             colors: Optional colors for particles
         """
+        # Start the line clear animation
+        self._clearing_rows = rows.copy()
+        self._clear_anim_progress = 0.0
+        
         # Screen shake based on lines cleared
         shake_intensity = 0.1 * lines
         if lines == 4:  # Tetris

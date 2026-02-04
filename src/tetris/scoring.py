@@ -32,34 +32,34 @@ class Scoring:
     - Perfect clears
     """
     
-    # Base scores for line clears (without level multiplier)
+    # Base scores for line clears - simplified: 10 points per row
     BASE_SCORES = {
         0: 0,
-        1: 100,    # Single
-        2: 300,    # Double
-        3: 500,    # Triple
-        4: 800,    # Tetris
+        1: 10,    # Single - 10 pts
+        2: 20,    # Double - 20 pts
+        3: 30,    # Triple - 30 pts
+        4: 40,    # Tetris - 40 pts
     }
     
-    # T-Spin scores
+    # T-Spin scores - bonus on top of line clears
     TSPIN_SCORES = {
-        (False, 0): 400,   # T-Spin no lines
-        (False, 1): 800,   # T-Spin Single
-        (False, 2): 1200,  # T-Spin Double
-        (False, 3): 1600,  # T-Spin Triple
-        (True, 0): 100,    # T-Spin Mini no lines
-        (True, 1): 200,    # T-Spin Mini Single
-        (True, 2): 400,    # T-Spin Mini Double (rare)
+        (False, 0): 0,     # T-Spin no lines
+        (False, 1): 10,    # T-Spin Single bonus
+        (False, 2): 20,    # T-Spin Double bonus
+        (False, 3): 30,    # T-Spin Triple bonus
+        (True, 0): 0,      # T-Spin Mini no lines
+        (True, 1): 5,      # T-Spin Mini Single bonus
+        (True, 2): 10,     # T-Spin Mini Double bonus
     }
     
     # Perfect clear bonus
-    PERFECT_CLEAR_BONUS = 3000
+    PERFECT_CLEAR_BONUS = 50
     
     # Back-to-back multiplier
     B2B_MULTIPLIER = 1.5
     
     # Combo bonus per combo count
-    COMBO_BONUS = 50
+    COMBO_BONUS = 5
     
     def __init__(self):
         self._score = 0
@@ -92,11 +92,12 @@ class Scoring:
         """
         points = 0
         
-        # Handle T-Spin
+        # Handle T-Spin - adds bonus to line clear points
         if event.is_tspin or event.is_tspin_mini:
             key = (event.is_tspin_mini, event.lines_cleared)
-            base_score = self.TSPIN_SCORES.get(key, 0)
-            points = base_score * event.level
+            tspin_bonus = self.TSPIN_SCORES.get(key, 0)
+            # Also add the regular line clear points
+            points = self.BASE_SCORES.get(event.lines_cleared, 0) + tspin_bonus
             
             # Update stats
             if event.is_tspin_mini:
@@ -106,8 +107,8 @@ class Scoring:
             
             is_difficult = True
         elif event.lines_cleared > 0:
-            # Regular line clear
-            points = self.BASE_SCORES.get(event.lines_cleared, 0) * event.level
+            # Regular line clear - simple 10 pts per row
+            points = self.BASE_SCORES.get(event.lines_cleared, 0)
             is_difficult = (event.lines_cleared == 4)  # Tetris is difficult
             
             # Update stats
@@ -133,10 +134,10 @@ class Scoring:
             
             self._last_was_difficult = is_difficult
             
-            # Combo bonus
+            # Combo bonus (no level multiplier)
             self._combo += 1
             if self._combo > 0:
-                points += self.COMBO_BONUS * self._combo * event.level
+                points += self.COMBO_BONUS * self._combo
             self._max_combo = max(self._max_combo, self._combo)
         else:
             # No lines cleared, reset combo
@@ -144,14 +145,10 @@ class Scoring:
         
         # Perfect clear bonus
         if event.is_perfect_clear:
-            points += self.PERFECT_CLEAR_BONUS * event.level
+            points += self.PERFECT_CLEAR_BONUS
             self._perfect_clears += 1
         
-        # Hard drop bonus (2 points per cell)
-        if event.is_hard_drop:
-            points += event.drop_distance * 2
-        
-        # Soft drop points (1 point per cell, usually added separately)
+        # No hard drop or soft drop points - only row clears give points
         
         self._score += points
         self._lines_cleared += event.lines_cleared
@@ -159,8 +156,8 @@ class Scoring:
         return points
     
     def add_soft_drop_points(self, cells: int) -> None:
-        """Add points for soft dropping."""
-        self._score += cells
+        """Soft drop no longer gives points - score only from row clears."""
+        pass  # No points for soft drops
     
     def update_level(self, lines_per_level: int = 10) -> bool:
         """

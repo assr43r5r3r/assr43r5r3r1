@@ -158,6 +158,9 @@ class TetrisApp:
         self._in_countdown = False
         self._waiting_for_profile = False
         
+        # Menu button rect for gameplay (initialized in draw)
+        self._menu_button_rect = pygame.Rect(0, 0, 0, 0)
+        
         # Add leaderboard button to main menu
         self._setup_main_menu_extras()
         
@@ -181,9 +184,12 @@ class TetrisApp:
     
     def _setup_menus(self) -> None:
         """Configure menu callbacks."""
-        # Main menu
+        # Main menu - updated for new structure
         self._main_menu.set_callbacks(
-            on_start=self._request_game_start,
+            on_regular=self._request_regular_game,
+            on_story=self._request_story_mode,
+            on_leaderboard=self._show_leaderboard,
+            on_add_player=self._show_add_player,
             on_settings=self._open_settings_from_menu,
             on_quit=self._request_quit
         )
@@ -198,15 +204,18 @@ class TetrisApp:
         
         # Game over menu
         self._game_over_menu.set_callbacks(
-            on_restart=self._request_game_start,
+            on_restart=self._request_regular_game,
             on_quit=self._quit_to_menu
         )
         
-        # Settings menu
+        # Settings menu - with additional callbacks
         self._settings_menu.set_callbacks(
             on_back=self._close_settings,
             on_volume_change=self._on_volume_change,
-            on_palette_change=self._on_palette_change
+            on_palette_change=self._on_palette_change,
+            on_toggle_ghost=self._on_toggle_ghost,
+            on_toggle_particles=self._on_toggle_particles,
+            on_toggle_shake=self._on_toggle_shake
         )
         
         # Countdown
@@ -236,8 +245,8 @@ class TetrisApp:
         self._save_manager.profiles.set_current_profile(profile.id)
         self._waiting_for_profile = False
     
-    def _request_game_start(self) -> None:
-        """Request to start a new game (shows countdown)."""
+    def _request_regular_game(self) -> None:
+        """Request to start a regular game."""
         if not self._save_manager.current_player:
             self._waiting_for_profile = True
             self._name_entry.show(
@@ -246,6 +255,30 @@ class TetrisApp:
             )
         else:
             self._start_countdown()
+    
+    def _request_story_mode(self) -> None:
+        """Request to start story mode (placeholder - not fully implemented yet)."""
+        # Show a "Coming Soon" dialog
+        self._confirm_dialog.show(
+            "Story Mode",
+            "Coming Soon! Story mode is under development.",
+            on_confirm=lambda: None,
+            on_cancel=lambda: None
+        )
+        self._audio.play_sound("menu_select")
+    
+    def _show_leaderboard(self) -> None:
+        """Show the leaderboard screen."""
+        entries = self._save_manager.leaderboard.get_top(20)
+        self._leaderboard_screen.show(entries, on_close=lambda: None)
+    
+    def _show_add_player(self) -> None:
+        """Show the add player screen."""
+        self._waiting_for_profile = True
+        self._name_entry.show(
+            on_confirm=self._on_profile_created,
+            on_cancel=lambda: setattr(self, '_waiting_for_profile', False)
+        )
     
     def _on_profile_created_and_start(self, name: str, avatar_path: Optional[str]) -> None:
         """Handle profile creation and start game."""
@@ -398,6 +431,21 @@ class TetrisApp:
             self._renderer.set_palette(PALETTES[palette])
             self._audio.play_sound("menu_select")
     
+    def _on_toggle_ghost(self, enabled: bool) -> None:
+        """Handle ghost piece toggle from settings."""
+        self._renderer._show_ghost = enabled
+        self._audio.play_sound("menu_select")
+    
+    def _on_toggle_particles(self, enabled: bool) -> None:
+        """Handle particles toggle from settings."""
+        self._renderer._particles_enabled = enabled
+        self._audio.play_sound("menu_select")
+    
+    def _on_toggle_shake(self, enabled: bool) -> None:
+        """Handle screen shake toggle from settings."""
+        self._renderer._shake_enabled = enabled
+        self._audio.play_sound("menu_select")
+    
     def _request_quit(self) -> None:
         """Request to quit application with confirmation."""
         self._confirm_dialog.show(
@@ -522,6 +570,12 @@ class TetrisApp:
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     self._pause_game()
+            
+            # Check for menu button click
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if self._menu_button_rect.collidepoint(event.pos):
+                    self._pause_game()
+                    self._audio.play_sound("menu_select")
         
         elif self._state == GameState.PAUSED:
             self._pause_menu.handle_event(event)
@@ -629,8 +683,10 @@ class TetrisApp:
         
         elif self._state == GameState.PLAYING and self._game:
             self._renderer.render(self._game)
+            self._draw_gameplay_player_info()
             self._draw_stage_info()
             self._draw_timer()
+            self._draw_menu_button()
             
             # Draw stage transition on top
             if self._stage_transition.is_active:
@@ -669,7 +725,8 @@ class TetrisApp:
         font = pygame.font.Font(None, 28)
         stage_text = f"STAGE {self._stage_manager.current_stage} - {self._stage_manager.stage_name}"
         surf = font.render(stage_text, True, (200, 200, 220))
-        self._screen.blit(surf, (20, 20))
+        # Position in right panel area
+        self._screen.blit(surf, (self._screen.get_width() - 250, 320))
     
     def _draw_timer(self) -> None:
         """Draw game timer."""
@@ -679,6 +736,71 @@ class TetrisApp:
         time_text = f"{minutes:02d}:{seconds:02d}"
         surf = font.render(time_text, True, (180, 180, 200))
         self._screen.blit(surf, (self._screen.get_width() - 80, 20))
+    
+    def _draw_gameplay_player_info(self) -> None:
+        """Draw player info (name + circular avatar) in upper left during gameplay."""
+        player = self._save_manager.current_player
+        if not player:
+            return
+        
+        # Avatar position
+        avatar_size = 40
+        avatar_x = 20
+        avatar_y = 20
+        
+        # Draw circular avatar with frame
+        pygame.draw.circle(self._screen, (60, 60, 80), (avatar_x + avatar_size // 2, avatar_y + avatar_size // 2), avatar_size // 2 + 3)
+        
+        # Get player avatar surface (PlayerProfile always has this method)
+        avatar_surface = player.get_avatar_surface()
+        if avatar_surface:
+            # Scale and clip to circle
+            scaled = pygame.transform.smoothscale(avatar_surface, (avatar_size, avatar_size))
+            # Create circular mask
+            mask = pygame.Surface((avatar_size, avatar_size), pygame.SRCALPHA)
+            pygame.draw.circle(mask, (255, 255, 255, 255), (avatar_size // 2, avatar_size // 2), avatar_size // 2)
+            scaled.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+            self._screen.blit(scaled, (avatar_x, avatar_y))
+        else:
+            # Default avatar - draw a simple person silhouette
+            pygame.draw.circle(self._screen, (80, 100, 130), (avatar_x + avatar_size // 2, avatar_y + avatar_size // 2), avatar_size // 2)
+            # Draw simple user icon
+            font = pygame.font.Font(None, 28)
+            icon = font.render("👤", True, (200, 200, 220))
+            self._screen.blit(icon, (avatar_x + (avatar_size - icon.get_width()) // 2, avatar_y + (avatar_size - icon.get_height()) // 2))
+        
+        # Draw accent frame
+        pygame.draw.circle(self._screen, (100, 180, 255), (avatar_x + avatar_size // 2, avatar_y + avatar_size // 2), avatar_size // 2 + 2, 2)
+        
+        # Draw player name next to avatar
+        font = pygame.font.Font(None, 26)
+        name_surf = font.render(player.name, True, (200, 220, 255))
+        self._screen.blit(name_surf, (avatar_x + avatar_size + 12, avatar_y + (avatar_size - name_surf.get_height()) // 2))
+    
+    def _draw_menu_button(self) -> None:
+        """Draw a clickable menu button in the upper right corner."""
+        btn_width = 60
+        btn_height = 30
+        btn_x = self._screen.get_width() - btn_width - 20
+        btn_y = 55  # Below the timer
+        
+        self._menu_button_rect = pygame.Rect(btn_x, btn_y, btn_width, btn_height)
+        
+        # Check if mouse is hovering
+        mouse_pos = pygame.mouse.get_pos()
+        is_hovered = self._menu_button_rect.collidepoint(mouse_pos)
+        
+        # Draw button
+        color = (80, 80, 120) if is_hovered else (50, 50, 70)
+        pygame.draw.rect(self._screen, color, self._menu_button_rect, border_radius=8)
+        pygame.draw.rect(self._screen, (100, 140, 200), self._menu_button_rect, 2, border_radius=8)
+        
+        # Draw text
+        font = pygame.font.Font(None, 22)
+        text = font.render("MENU", True, (200, 200, 220))
+        text_x = btn_x + (btn_width - text.get_width()) // 2
+        text_y = btn_y + (btn_height - text.get_height()) // 2
+        self._screen.blit(text, (text_x, text_y))
     
     def run(self) -> None:
         """Run the main game loop."""

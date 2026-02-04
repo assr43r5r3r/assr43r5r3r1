@@ -209,6 +209,10 @@ class AudioManager:
         """Play line clear sound based on lines cleared."""
         if lines == 4:
             self.play_sound("tetris")
+        elif lines == 3:
+            self.play_sound("clear_triple")
+        elif lines == 2:
+            self.play_sound("clear_double")
         elif lines >= 1:
             self.play_sound("clear")
     
@@ -221,8 +225,8 @@ class AudioManager:
         self.play_sound("combo")
     
     def play_level_up(self) -> None:
-        """Play level up sound."""
-        self.play_sound("level_up")
+        """Play level up / stage up sound."""
+        self.play_sound("stage_up")
     
     def play_game_over(self) -> None:
         """Play game over sound."""
@@ -235,6 +239,10 @@ class AudioManager:
     def play_menu_move(self) -> None:
         """Play menu navigation sound."""
         self.play_sound("menu_move")
+    
+    def play_perfect_clear(self) -> None:
+        """Play perfect clear sound."""
+        self.play_sound("perfect_clear")
 
 
 def create_placeholder_sounds(audio: AudioManager) -> None:
@@ -282,25 +290,45 @@ def create_placeholder_sounds(audio: AudioManager) -> None:
             
             return pygame.mixer.Sound(buffer=buf)
         
+        def create_sweep(start_freq: float, end_freq: float, duration: float, volume: float = 0.3) -> pygame.mixer.Sound:
+            """Create a frequency sweep sound."""
+            n_samples = int(sample_rate * duration)
+            buf = array.array('h', [0] * n_samples)
+            
+            for i in range(n_samples):
+                t = i / sample_rate
+                progress = t / duration
+                freq = start_freq + (end_freq - start_freq) * progress
+                env = min(1.0, min(t / 0.02, (duration - t) / 0.05))
+                val = int(32767 * volume * env * math.sin(2 * math.pi * freq * t))
+                buf[i] = val
+            
+            return pygame.mixer.Sound(buffer=buf)
+        
         # Create sounds
         audio._sounds["move"] = create_beep(300, 0.05, 0.2)
         audio._sounds["rotate"] = create_beep(400, 0.08, 0.25)
         audio._sounds["lock"] = create_beep(200, 0.1, 0.3)
         audio._sounds["hold"] = create_beep(350, 0.1, 0.25)
         audio._sounds["hard_drop"] = create_beep(150, 0.15, 0.35)
-        audio._sounds["clear"] = create_beep(500, 0.2, 0.3)
-        audio._sounds["tetris"] = create_beep(600, 0.3, 0.4)
-        audio._sounds["tspin"] = create_beep(550, 0.25, 0.35)
-        audio._sounds["combo"] = create_beep(450, 0.15, 0.3)
-        audio._sounds["level_up"] = create_beep(700, 0.4, 0.35)
-        audio._sounds["game_over"] = create_beep(100, 0.5, 0.4)
-        audio._sounds["menu_select"] = create_beep(400, 0.1, 0.25)
-        audio._sounds["menu_move"] = create_beep(300, 0.05, 0.2)
+        audio._sounds["clear"] = create_sweep(400, 600, 0.2, 0.35)
+        audio._sounds["clear_double"] = create_sweep(400, 700, 0.25, 0.38)
+        audio._sounds["clear_triple"] = create_sweep(400, 800, 0.3, 0.4)
+        audio._sounds["tetris"] = create_chord([523, 659, 784], 0.4, 0.45)
+        audio._sounds["tspin"] = create_chord([440, 523, 659], 0.3, 0.4)
+        audio._sounds["combo"] = create_sweep(300, 500, 0.15, 0.3)
+        audio._sounds["level_up"] = create_sweep(400, 800, 0.5, 0.4)
+        audio._sounds["game_over"] = create_sweep(400, 100, 0.8, 0.35)
+        audio._sounds["menu_select"] = create_beep(500, 0.08, 0.28)
+        audio._sounds["menu_move"] = create_beep(350, 0.04, 0.18)
+        audio._sounds["menu_back"] = create_beep(250, 0.08, 0.22)
+        audio._sounds["error"] = create_beep(200, 0.15, 0.3)
         
         # New sounds for countdown and stage
         audio._sounds["countdown"] = create_beep(440, 0.15, 0.4)
         audio._sounds["go"] = create_chord([523, 659, 784], 0.4, 0.5)  # C major chord
         audio._sounds["stage_up"] = create_chord([440, 554, 659], 0.5, 0.45)  # A major chord
+        audio._sounds["perfect_clear"] = create_chord([523, 659, 784, 1046], 0.6, 0.5)
         
     except Exception:
         # Silently fail if sound creation fails

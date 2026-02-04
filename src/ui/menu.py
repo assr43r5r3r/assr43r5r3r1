@@ -92,6 +92,9 @@ class Menu:
         # Button rects for mouse detection
         self._button_rects: List[pygame.Rect] = []
         
+        # Slider drag state
+        self._dragging_slider: int = -1  # Index of slider being dragged, -1 = none
+        
         # Audio callback
         self._play_sound: Optional[Callable[[str], None]] = None
         
@@ -229,6 +232,21 @@ class Menu:
         
         elif event.type == pygame.MOUSEMOTION:
             mouse_pos = event.pos
+            
+            # Handle slider dragging
+            if self._dragging_slider >= 0 and self._dragging_slider < len(self._button_rects):
+                rect = self._button_rects[self._dragging_slider]
+                item = self._items[self._dragging_slider]
+                if item.is_slider:
+                    slider_x = rect.x + 120
+                    slider_width = rect.width - 140
+                    click_x = mouse_pos[0] - slider_x
+                    value = max(0.0, min(1.0, click_x / slider_width))
+                    item.slider_value = value
+                    if item.slider_callback:
+                        item.slider_callback(value)
+                    return True
+            
             old_selected = self._selected_index
             self._hovered_index = -1
             
@@ -253,8 +271,9 @@ class Menu:
                     if rect.collidepoint(mouse_pos) and self._items[i].enabled:
                         self._selected_index = i
                         
-                        # Handle slider click
+                        # Handle slider click - start dragging
                         if self._items[i].is_slider:
+                            self._dragging_slider = i
                             # Calculate slider value from click position
                             slider_x = rect.x + 120
                             slider_width = rect.width - 140
@@ -266,6 +285,10 @@ class Menu:
                         else:
                             self.select()
                         return True
+        
+        elif event.type == pygame.MOUSEBUTTONUP:
+            if event.button == 1:
+                self._dragging_slider = -1
         
         return False
     
@@ -449,12 +472,15 @@ class Menu:
 
 
 class MainMenu(Menu):
-    """Main menu."""
+    """Main menu with Play options, Leaderboard, Add Player, Settings, Quit."""
     
     def __init__(self, screen: pygame.Surface):
         super().__init__(screen, "TETRIS")
         
-        self._on_start_game: Optional[Callable] = None
+        self._on_regular_mode: Optional[Callable] = None
+        self._on_story_mode: Optional[Callable] = None
+        self._on_leaderboard: Optional[Callable] = None
+        self._on_add_player: Optional[Callable] = None
         self._on_settings: Optional[Callable] = None
         self._on_quit: Optional[Callable] = None
         
@@ -463,16 +489,31 @@ class MainMenu(Menu):
     def _build_menu(self) -> None:
         """Build menu items."""
         self._items = [
-            MenuItem("PLAY", self._start_game),
+            MenuItem("REGULAR MODE", self._start_regular),
+            MenuItem("STORY MODE", self._start_story),
+            MenuItem("LEADERBOARD", self._show_leaderboard),
+            MenuItem("ADD PLAYER", self._add_player),
             MenuItem("SETTINGS", self._open_settings),
             MenuItem("QUIT", self._quit_game),
         ]
         for i in range(len(self._items)):
             self._hover_animations[i] = 0.0
     
-    def _start_game(self) -> None:
-        if self._on_start_game:
-            self._on_start_game()
+    def _start_regular(self) -> None:
+        if self._on_regular_mode:
+            self._on_regular_mode()
+    
+    def _start_story(self) -> None:
+        if self._on_story_mode:
+            self._on_story_mode()
+    
+    def _show_leaderboard(self) -> None:
+        if self._on_leaderboard:
+            self._on_leaderboard()
+    
+    def _add_player(self) -> None:
+        if self._on_add_player:
+            self._on_add_player()
     
     def _open_settings(self) -> None:
         if self._on_settings:
@@ -484,18 +525,24 @@ class MainMenu(Menu):
     
     def set_callbacks(
         self,
-        on_start: Callable = None,
+        on_regular: Callable = None,
+        on_story: Callable = None,
+        on_leaderboard: Callable = None,
+        on_add_player: Callable = None,
         on_settings: Callable = None,
         on_quit: Callable = None
     ) -> None:
         """Set menu callbacks."""
-        self._on_start_game = on_start
+        self._on_regular_mode = on_regular
+        self._on_story_mode = on_story
+        self._on_leaderboard = on_leaderboard
+        self._on_add_player = on_add_player
         self._on_settings = on_settings
         self._on_quit = on_quit
 
 
 class SettingsMenu(Menu):
-    """Settings menu with volume and visual options."""
+    """Settings menu with volume, visual options, and gameplay settings."""
     
     def __init__(self, screen: pygame.Surface):
         super().__init__(screen, "SETTINGS")
@@ -503,11 +550,17 @@ class SettingsMenu(Menu):
         self._on_back_callback: Optional[Callable] = None
         self._on_volume_change: Optional[Callable[[str, float], None]] = None
         self._on_palette_change: Optional[Callable[[str], None]] = None
+        self._on_toggle_ghost: Optional[Callable[[bool], None]] = None
+        self._on_toggle_particles: Optional[Callable[[bool], None]] = None
+        self._on_toggle_shake: Optional[Callable[[bool], None]] = None
         
         self._master_volume = 0.8
         self._sfx_volume = 0.7
         self._music_volume = 0.5
         self._current_palette = "classic"
+        self._ghost_enabled = True
+        self._particles_enabled = True
+        self._shake_enabled = True
         
         self._build_menu()
     
@@ -521,6 +574,9 @@ class SettingsMenu(Menu):
             MenuItem("Music", is_slider=True, slider_value=self._music_volume,
                     slider_callback=lambda v: self._set_volume("music", v)),
             MenuItem("THEME: CLASSIC", action=self._cycle_palette),
+            MenuItem("GHOST PIECE: ON", action=self._toggle_ghost),
+            MenuItem("PARTICLES: ON", action=self._toggle_particles),
+            MenuItem("SCREEN SHAKE: ON", action=self._toggle_shake),
             MenuItem("BACK", action=self._go_back),
         ]
         for i in range(len(self._items)):
@@ -550,6 +606,27 @@ class SettingsMenu(Menu):
         if self._on_palette_change:
             self._on_palette_change(self._current_palette)
     
+    def _toggle_ghost(self) -> None:
+        """Toggle ghost piece visibility."""
+        self._ghost_enabled = not self._ghost_enabled
+        self._items[4].text = f"GHOST PIECE: {'ON' if self._ghost_enabled else 'OFF'}"
+        if self._on_toggle_ghost:
+            self._on_toggle_ghost(self._ghost_enabled)
+    
+    def _toggle_particles(self) -> None:
+        """Toggle particle effects."""
+        self._particles_enabled = not self._particles_enabled
+        self._items[5].text = f"PARTICLES: {'ON' if self._particles_enabled else 'OFF'}"
+        if self._on_toggle_particles:
+            self._on_toggle_particles(self._particles_enabled)
+    
+    def _toggle_shake(self) -> None:
+        """Toggle screen shake."""
+        self._shake_enabled = not self._shake_enabled
+        self._items[6].text = f"SCREEN SHAKE: {'ON' if self._shake_enabled else 'OFF'}"
+        if self._on_toggle_shake:
+            self._on_toggle_shake(self._shake_enabled)
+    
     def _go_back(self) -> None:
         """Go back to previous menu."""
         if self._on_back_callback:
@@ -559,20 +636,30 @@ class SettingsMenu(Menu):
         self,
         on_back: Callable = None,
         on_volume_change: Callable[[str, float], None] = None,
-        on_palette_change: Callable[[str], None] = None
+        on_palette_change: Callable[[str], None] = None,
+        on_toggle_ghost: Callable[[bool], None] = None,
+        on_toggle_particles: Callable[[bool], None] = None,
+        on_toggle_shake: Callable[[bool], None] = None
     ) -> None:
         """Set settings callbacks."""
         self._on_back_callback = on_back
         self._on_back = on_back  # Also set parent class callback
         self._on_volume_change = on_volume_change
         self._on_palette_change = on_palette_change
+        self._on_toggle_ghost = on_toggle_ghost
+        self._on_toggle_particles = on_toggle_particles
+        self._on_toggle_shake = on_toggle_shake
     
-    def set_values(self, master: float, sfx: float, music: float, palette: str) -> None:
+    def set_values(self, master: float, sfx: float, music: float, palette: str,
+                   ghost: bool = True, particles: bool = True, shake: bool = True) -> None:
         """Set current values."""
         self._master_volume = master
         self._sfx_volume = sfx
         self._music_volume = music
         self._current_palette = palette
+        self._ghost_enabled = ghost
+        self._particles_enabled = particles
+        self._shake_enabled = shake
         
         # Update sliders
         if len(self._items) > 0:
@@ -583,6 +670,12 @@ class SettingsMenu(Menu):
             self._items[2].slider_value = music
         if len(self._items) > 3:
             self._items[3].text = f"THEME: {palette.upper()}"
+        if len(self._items) > 4:
+            self._items[4].text = f"GHOST PIECE: {'ON' if ghost else 'OFF'}"
+        if len(self._items) > 5:
+            self._items[5].text = f"PARTICLES: {'ON' if particles else 'OFF'}"
+        if len(self._items) > 6:
+            self._items[6].text = f"SCREEN SHAKE: {'ON' if shake else 'OFF'}"
 
 
 class PauseMenu(Menu):
