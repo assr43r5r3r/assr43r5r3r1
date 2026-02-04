@@ -266,6 +266,22 @@ def create_placeholder_sounds(audio: AudioManager) -> None:
             
             return pygame.mixer.Sound(buffer=buf)
         
+        def create_chord(frequencies: list, duration: float, volume: float = 0.3) -> pygame.mixer.Sound:
+            """Create a chord sound."""
+            n_samples = int(sample_rate * duration)
+            buf = array.array('h', [0] * n_samples)
+            
+            for i in range(n_samples):
+                t = i / sample_rate
+                env = min(1.0, min(t / 0.02, (duration - t) / 0.1))
+                val = 0
+                for freq in frequencies:
+                    val += math.sin(2 * math.pi * freq * t)
+                val = int(32767 * volume * env * val / len(frequencies))
+                buf[i] = max(-32767, min(32767, val))
+            
+            return pygame.mixer.Sound(buffer=buf)
+        
         # Create sounds
         audio._sounds["move"] = create_beep(300, 0.05, 0.2)
         audio._sounds["rotate"] = create_beep(400, 0.08, 0.25)
@@ -280,6 +296,11 @@ def create_placeholder_sounds(audio: AudioManager) -> None:
         audio._sounds["game_over"] = create_beep(100, 0.5, 0.4)
         audio._sounds["menu_select"] = create_beep(400, 0.1, 0.25)
         audio._sounds["menu_move"] = create_beep(300, 0.05, 0.2)
+        
+        # New sounds for countdown and stage
+        audio._sounds["countdown"] = create_beep(440, 0.15, 0.4)
+        audio._sounds["go"] = create_chord([523, 659, 784], 0.4, 0.5)  # C major chord
+        audio._sounds["stage_up"] = create_chord([440, 554, 659], 0.5, 0.45)  # A major chord
         
     except Exception:
         # Silently fail if sound creation fails

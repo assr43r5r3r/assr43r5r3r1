@@ -2,7 +2,7 @@
 Input handling for keyboard and gamepad.
 """
 
-from typing import Dict, Set, Optional, Callable, List
+from typing import Dict, Set, Optional, Callable, List, Union
 from dataclasses import dataclass, field
 
 try:
@@ -20,18 +20,16 @@ class InputConfig:
     arr_rate: int = 2    # Frames between auto-repeats
     soft_drop_rate: int = 2  # Frames per soft drop cell
     
-    # Key bindings (pygame key constants as strings)
-    bindings: Dict[str, str] = field(default_factory=lambda: {
-        "move_left": "K_LEFT",
-        "move_right": "K_RIGHT",
-        "soft_drop": "K_DOWN",
+    # Key bindings - can be single key or list of keys
+    bindings: Dict[str, Union[str, List[str]]] = field(default_factory=lambda: {
+        "move_left": ["K_LEFT", "K_a"],
+        "move_right": ["K_RIGHT", "K_d"],
+        "soft_drop": ["K_DOWN", "K_s"],
         "hard_drop": "K_SPACE",
-        "rotate_cw": "K_UP",
+        "rotate_cw": ["K_UP", "K_w"],
         "rotate_ccw": "K_z",
-        "rotate_180": "K_a",
         "hold": "K_c",
         "pause": "K_ESCAPE",
-        "restart": "K_r",
     })
 
 
@@ -86,10 +84,15 @@ class InputHandler:
         """Build key code to action mapping."""
         self._key_map.clear()
         
-        for action, key_name in self._config.bindings.items():
-            key_code = getattr(pygame, key_name, None)
-            if key_code is not None:
-                self._key_map[key_code] = action
+        for action, key_names in self._config.bindings.items():
+            # Handle both single key and list of keys
+            if isinstance(key_names, str):
+                key_names = [key_names]
+            
+            for key_name in key_names:
+                key_code = getattr(pygame, key_name, None)
+                if key_code is not None:
+                    self._key_map[key_code] = action
     
     def _init_gamepad(self) -> None:
         """Initialize gamepad if available."""
@@ -98,15 +101,15 @@ class InputHandler:
             self._gamepad = pygame.joystick.Joystick(0)
             self._gamepad.init()
     
-    def set_binding(self, action: str, key_name: str) -> None:
+    def set_binding(self, action: str, key_names: Union[str, List[str]]) -> None:
         """
         Set a key binding.
         
         Args:
             action: Action name
-            key_name: Pygame key name (e.g., "K_LEFT")
+            key_names: Pygame key name(s) (e.g., "K_LEFT" or ["K_LEFT", "K_a"])
         """
-        self._config.bindings[action] = key_name
+        self._config.bindings[action] = key_names
         self._build_key_map()
     
     def bind_action(self, action: str, callback: Callable) -> None:
@@ -118,6 +121,26 @@ class InputHandler:
             callback: Function to call when action triggers
         """
         self._actions[action] = callback
+    
+    def _get_keys_for_action(self, action: str) -> List[int]:
+        """Get all key codes for an action."""
+        key_names = self._config.bindings.get(action, [])
+        if isinstance(key_names, str):
+            key_names = [key_names]
+        
+        codes = []
+        for name in key_names:
+            code = getattr(pygame, name, None)
+            if code is not None:
+                codes.append(code)
+        return codes
+    
+    def _is_action_held(self, action: str) -> bool:
+        """Check if any key for action is held."""
+        for key_code in self._get_keys_for_action(action):
+            if key_code in self._keys_held:
+                return True
+        return False
     
     def handle_event(self, event: pygame.event.Event) -> None:
         """
@@ -135,7 +158,7 @@ class InputHandler:
             
             if action:
                 # Buffer rotation and hard drop
-                if action in ("rotate_cw", "rotate_ccw", "rotate_180", "hard_drop", "hold"):
+                if action in ("rotate_cw", "rotate_ccw", "hard_drop", "hold"):
                     self._buffer.buffer(action)
                 
                 # Handle movement with immediate first move
@@ -160,16 +183,14 @@ class InputHandler:
                 # Stop DAS when movement key released
                 if action == "move_left" and self._das.direction == -1:
                     # Check if other direction is held
-                    right_key = getattr(pygame, self._config.bindings.get("move_right", ""), None)
-                    if right_key and right_key in self._keys_held:
+                    if self._is_action_held("move_right"):
                         self._das.start(1)
-                    else:
+                    elif not self._is_action_held("move_left"):
                         self._das.stop()
                 elif action == "move_right" and self._das.direction == 1:
-                    left_key = getattr(pygame, self._config.bindings.get("move_left", ""), None)
-                    if left_key and left_key in self._keys_held:
+                    if self._is_action_held("move_left"):
                         self._das.start(-1)
-                    else:
+                    elif not self._is_action_held("move_right"):
                         self._das.stop()
     
     def update(self) -> None:
@@ -181,8 +202,8 @@ class InputHandler:
         # Update buffer
         self._buffer.update()
         
-        # Process buffered actions
-        for action in ("rotate_cw", "rotate_ccw", "rotate_180", "hard_drop", "hold"):
+        # Process buffered actions (removed rotate_180)
+        for action in ("rotate_cw", "rotate_ccw", "hard_drop", "hold"):
             if self._buffer.consume(action):
                 if action in self._actions:
                     self._actions[action]()
@@ -196,8 +217,7 @@ class InputHandler:
                     self._actions["move_right"]()
         
         # Process soft drop
-        soft_drop_key = getattr(pygame, self._config.bindings.get("soft_drop", ""), None)
-        if soft_drop_key and soft_drop_key in self._keys_held:
+        if self._is_action_held("soft_drop"):
             self._soft_drop_counter += 1
             if self._soft_drop_counter >= self._config.soft_drop_rate:
                 self._soft_drop_counter = 0
@@ -212,20 +232,13 @@ class InputHandler:
     
     def is_held(self, action: str) -> bool:
         """Check if an action's key is currently held."""
-        key_name = self._config.bindings.get(action)
-        if key_name:
-            key_code = getattr(pygame, key_name, None)
-            if key_code:
-                return key_code in self._keys_held
-        return False
+        return self._is_action_held(action)
     
     def was_pressed(self, action: str) -> bool:
         """Check if an action's key was just pressed this frame."""
-        key_name = self._config.bindings.get(action)
-        if key_name:
-            key_code = getattr(pygame, key_name, None)
-            if key_code:
-                return key_code in self._keys_pressed
+        for key_code in self._get_keys_for_action(action):
+            if key_code in self._keys_pressed:
+                return True
         return False
     
     def reset(self) -> None:

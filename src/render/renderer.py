@@ -349,12 +349,12 @@ class Renderer:
             self._draw_mini_piece(hold_piece, box_x + 20, box_y + 20, color)
     
     def _draw_next(self, next_pieces: List[str]) -> None:
-        """Draw the next pieces preview."""
+        """Draw the next pieces preview (3 pieces only)."""
         # Position to the right of the grid
         box_x = self._grid_x + self._grid_width * self._cell_size + 20
         box_y = self._grid_y
         box_width = 120
-        box_height = 400
+        box_height = 250  # Reduced height for 3 pieces
         
         # Draw box
         box_rect = pygame.Rect(box_x, box_y, box_width, box_height)
@@ -364,8 +364,8 @@ class Renderer:
         label = self._font_small.render("NEXT", True, self._palette["ui_text"])
         self._screen.blit(label, (box_x + (box_width - label.get_width()) // 2, box_y - 25))
         
-        # Draw pieces
-        for i, piece_type in enumerate(next_pieces[:5]):
+        # Draw only 3 pieces
+        for i, piece_type in enumerate(next_pieces[:3]):
             color = self._palette[piece_type]
             self._draw_mini_piece(piece_type, box_x + 20, box_y + 20 + i * 75, color)
     

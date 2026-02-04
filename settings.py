@@ -25,47 +25,12 @@ SOFT_DROP_RATE = 2  # Soft drop speed multiplier
 LOCK_DELAY_FRAMES = 30  # 500ms at 60 FPS
 MAX_LOCK_RESETS = 15    # Maximum number of lock delay resets
 
-# Gravity settings (frames per cell drop)
-GRAVITY_LEVELS = {
-    0: 48,   # Level 0: 0.8 seconds per cell
-    1: 43,
-    2: 38,
-    3: 33,
-    4: 28,
-    5: 23,
-    6: 18,
-    7: 13,
-    8: 8,
-    9: 6,
-    10: 5,
-    11: 5,
-    12: 5,
-    13: 4,
-    14: 4,
-    15: 4,
-    16: 3,
-    17: 3,
-    18: 3,
-    19: 2,
-    20: 2,  # 20G starts here in some modes
-}
+# Scoring - simplified: 10 points per row
+SCORE_PER_ROW = 10
 
-# Scoring
-SCORE_SINGLE = 100
-SCORE_DOUBLE = 300
-SCORE_TRIPLE = 500
-SCORE_TETRIS = 800
-SCORE_TSPIN_MINI = 100
-SCORE_TSPIN = 400
-SCORE_TSPIN_SINGLE = 800
-SCORE_TSPIN_DOUBLE = 1200
-SCORE_TSPIN_TRIPLE = 1600
-SCORE_PERFECT_CLEAR = 3000
-SCORE_COMBO_MULTIPLIER = 50
-SCORE_B2B_MULTIPLIER = 1.5
-
-# Lines per level
-LINES_PER_LEVEL = 10
+# Stage system (replaces levels)
+MAX_STAGES = 25
+NEXT_PIECES_PREVIEW = 3  # Show only 3 next pieces
 
 # Visual settings
 PARTICLE_POOL_SIZE = 500
@@ -128,20 +93,21 @@ MASTER_VOLUME = 0.8
 MUSIC_VOLUME = 0.5
 SFX_VOLUME = 0.7
 
-# Key bindings (pygame key codes)
+# Key bindings (pygame key codes) - WASD and Arrow keys, no 180 rotation
 DEFAULT_CONTROLS = {
-    "move_left": "K_LEFT",
-    "move_right": "K_RIGHT",
-    "soft_drop": "K_DOWN",
+    "move_left": ["K_LEFT", "K_a"],
+    "move_right": ["K_RIGHT", "K_d"],
+    "soft_drop": ["K_DOWN", "K_s"],
     "hard_drop": "K_SPACE",
-    "rotate_cw": "K_UP",
+    "rotate_cw": ["K_UP", "K_w"],
     "rotate_ccw": "K_z",
-    "rotate_180": "K_a",
     "hold": "K_c",
     "pause": "K_ESCAPE",
-    "restart": "K_r",
 }
 
 # Gamepad settings
 GAMEPAD_ENABLED = True
 GAMEPAD_DEADZONE = 0.3
+
+# Save directory
+SAVE_DIRECTORY = "saves"
