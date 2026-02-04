@@ -168,7 +168,11 @@ class NameEntryScreen:
                 # Check avatar clicks
                 for i, rect in enumerate(self._avatar_rects):
                     if rect.collidepoint(pos):
-                        self._selected_avatar_idx = i if self._selected_avatar_idx != i else -1
+                        # Toggle selection: click same avatar to deselect, click different to select
+                        if self._selected_avatar_idx == i:
+                            self._selected_avatar_idx = -1  # Deselect
+                        else:
+                            self._selected_avatar_idx = i  # Select new avatar
                         if self._play_sound:
                             self._play_sound("menu_move")
                         return True

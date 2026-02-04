@@ -278,16 +278,5 @@ SAVE_DIRECTORY = "saves"
 AVATAR_DIRECTORY = "assets/avatars"
 AVATAR_SIZE_MENU = 48
 AVATAR_SIZE_GAMEPLAY = 80  # Larger avatar in gameplay
-# 10 default avatar slots - user should place images as 1.png, 2.png, etc.
-DEFAULT_AVATARS = [
-    "1.png",
-    "2.png",
-    "3.png",
-    "4.png",
-    "5.png",
-    "6.png",
-    "7.png",
-    "8.png",
-    "9.png",
-    "10.png",
-]
+# Generate 10 default avatar slots - user should place images as 1.png, 2.png, etc.
+DEFAULT_AVATARS = [f"{i}.png" for i in range(1, 11)]
