@@ -3,6 +3,7 @@ Menu system for the game with modern UI and mouse support.
 """
 
 import math
+import random
 from typing import List, Callable, Optional, Tuple, Any
 from dataclasses import dataclass, field
 from enum import Enum, auto
@@ -11,6 +12,11 @@ try:
     import pygame
 except ImportError:
     import pygame_ce as pygame
+
+
+def _format_theme_name(theme_id: str) -> str:
+    """Format theme ID for display (e.g., 'neon_anime' -> 'Neon Anime')."""
+    return theme_id.replace('_', ' ').title()
 
 
 @dataclass
@@ -532,7 +538,6 @@ class MainMenu(Menu):
     
     def _init_sparkles(self) -> None:
         """Initialize decorative sparkle particles."""
-        import random
         for i in range(20):
             self._sparkles.append({
                 'x': random.randint(0, self._screen.get_width()),
@@ -702,7 +707,6 @@ class MainMenu(Menu):
             s['phase'] += dt * 3
             if s['y'] < -10:
                 s['y'] = self._screen.get_height() + 10
-                import random
                 s['x'] = random.randint(0, self._screen.get_width())
     
     def draw(self) -> None:
@@ -1144,7 +1148,7 @@ class SettingsMenu(Menu):
         self._current_palette = palettes[(idx + 1) % len(palettes)]
         
         # Update button text - format nicely
-        display_name = self._current_palette.replace('_', ' ').title()
+        display_name = _format_theme_name(self._current_palette)
         self._items[3].text = f"THEME: {display_name}"
         
         if self._on_palette_change:
@@ -1227,7 +1231,7 @@ class SettingsMenu(Menu):
         if len(self._items) > 2:
             self._items[2].slider_value = music
         if len(self._items) > 3:
-            display_name = palette.replace('_', ' ').title()
+            display_name = _format_theme_name(palette)
             self._items[3].text = f"THEME: {display_name}"
         if len(self._items) > 4:
             self._items[4].text = f"GHOST PIECE: {'ON' if ghost else 'OFF'}"

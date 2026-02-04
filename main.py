@@ -167,9 +167,13 @@ class TetrisApp:
         self._in_countdown = False
         self._waiting_for_profile = False
         
-        # Window dragging support
+        # Window dragging support - check if API is available
         self._dragging_window = False
         self._drag_offset = (0, 0)
+        self._window_dragging_supported = (
+            hasattr(pygame.display, 'get_window_position') and 
+            hasattr(pygame.display, 'set_window_position')
+        )
         
         # Menu button rect for gameplay (initialized in draw)
         self._menu_button_rect = pygame.Rect(0, 0, 0, 0)
@@ -589,7 +593,7 @@ class TetrisApp:
         # Handle window dragging (borderless window)
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             # Check if clicking on top area (drag zone) - top 40 pixels
-            if event.pos[1] < 40 and not self._in_loading:
+            if event.pos[1] < 40 and not self._in_loading and self._window_dragging_supported:
                 self._dragging_window = True
                 self._drag_offset = event.pos
                 return
@@ -597,15 +601,11 @@ class TetrisApp:
         if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
             self._dragging_window = False
         
-        if event.type == pygame.MOUSEMOTION and self._dragging_window:
-            x, y = pygame.display.get_window_position() if hasattr(pygame.display, 'get_window_position') else (0, 0)
+        if event.type == pygame.MOUSEMOTION and self._dragging_window and self._window_dragging_supported:
+            x, y = pygame.display.get_window_position()
             new_x = x + event.pos[0] - self._drag_offset[0]
             new_y = y + event.pos[1] - self._drag_offset[1]
-            try:
-                pygame.display.set_window_position((new_x, new_y))
-            except AttributeError:
-                # Fallback for older pygame versions
-                pass
+            pygame.display.set_window_position((new_x, new_y))
             return
         
         # Handle loading screen - allow skipping with any key

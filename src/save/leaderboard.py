@@ -134,6 +134,20 @@ class Leaderboard:
         Returns:
             Position in leaderboard (1-indexed), or -1 if not ranked
         """
+        # Check if this player already has a better score
+        existing_best = self.get_player_best(player_id)
+        if existing_best is not None and existing_best.score >= score:
+            # Current score is not better, find existing position
+            self._sort()
+            for i, e in enumerate(self._entries):
+                if e.player_id == player_id:
+                    return i + 1
+            return -1
+        
+        # Remove any existing entries for this player (we're adding a new best)
+        self._entries = [e for e in self._entries if e.player_id != player_id]
+        
+        # Create and add new entry
         entry = LeaderboardEntry(
             player_name=player_name,
             player_id=player_id,
@@ -142,19 +156,7 @@ class Leaderboard:
             lines=lines,
             time_played=time_played
         )
-        
-        # Remove any existing entry for this player with lower score
-        self._entries = [
-            e for e in self._entries 
-            if e.player_id != player_id or e.score > score
-        ]
-        
-        # Only add if this score isn't beaten by an existing entry
-        existing_best = self.get_player_best(player_id)
-        if existing_best is None or score > existing_best.score:
-            # Remove the old best (if any) and add new one
-            self._entries = [e for e in self._entries if e.player_id != player_id]
-            self._entries.append(entry)
+        self._entries.append(entry)
         
         self._sort()
         

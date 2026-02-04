@@ -3,6 +3,7 @@ Loading screen with manga-style animations.
 """
 
 import math
+import random
 from typing import Callable, Optional
 
 try:
@@ -47,8 +48,6 @@ class LoadingScreen:
     
     def _init_blocks(self) -> None:
         """Initialize decorative falling blocks."""
-        import random
-        
         colors = [
             (100, 220, 255),  # I
             (255, 230, 100),  # O
@@ -90,7 +89,6 @@ class LoadingScreen:
             # Reset block when it falls off screen
             if block['y'] > self._height + 50:
                 block['y'] = -50
-                import random
                 block['x'] = random.randint(0, self._width)
         
         # Update loading dots
