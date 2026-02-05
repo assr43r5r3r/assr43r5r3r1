@@ -1218,6 +1218,13 @@ class SettingsMenu(Menu):
         self._shake_enabled = True
         self._fullscreen_enabled = False
         
+        # Menu item indices for easy reference
+        self._idx_theme = 3
+        self._idx_ghost = 4
+        self._idx_particles = 5
+        self._idx_shake = 6
+        self._idx_fullscreen = 7
+        
         # Two-column layout settings
         self._column_width = 280
         self._column_gap = 40
@@ -1241,7 +1248,7 @@ class SettingsMenu(Menu):
             MenuItem("GHOST PIECE: ON", action=self._toggle_ghost),
             MenuItem("PARTICLES: ON", action=self._toggle_particles),
             MenuItem("SCREEN SHAKE: ON", action=self._toggle_shake),
-            # Column 2: Window (items 7)
+            # Column 2: Window (item 7)
             MenuItem("FULLSCREEN: OFF", action=self._toggle_fullscreen),
             # Column 2: Player (items 8-9)
             MenuItem("LEADERBOARD", action=self._show_leaderboard),
@@ -1306,7 +1313,7 @@ class SettingsMenu(Menu):
         
         # Update button text - format nicely
         display_name = _format_theme_name(self._current_palette)
-        self._items[3].text = f"THEME: {display_name}"
+        self._items[self._idx_theme].text = f"THEME: {display_name}"
         
         if self._on_palette_change:
             self._on_palette_change(self._current_palette)
@@ -1314,28 +1321,28 @@ class SettingsMenu(Menu):
     def _toggle_ghost(self) -> None:
         """Toggle ghost piece visibility."""
         self._ghost_enabled = not self._ghost_enabled
-        self._items[4].text = f"GHOST PIECE: {'ON' if self._ghost_enabled else 'OFF'}"
+        self._items[self._idx_ghost].text = f"GHOST PIECE: {'ON' if self._ghost_enabled else 'OFF'}"
         if self._on_toggle_ghost:
             self._on_toggle_ghost(self._ghost_enabled)
     
     def _toggle_particles(self) -> None:
         """Toggle particle effects."""
         self._particles_enabled = not self._particles_enabled
-        self._items[5].text = f"PARTICLES: {'ON' if self._particles_enabled else 'OFF'}"
+        self._items[self._idx_particles].text = f"PARTICLES: {'ON' if self._particles_enabled else 'OFF'}"
         if self._on_toggle_particles:
             self._on_toggle_particles(self._particles_enabled)
     
     def _toggle_shake(self) -> None:
         """Toggle screen shake."""
         self._shake_enabled = not self._shake_enabled
-        self._items[6].text = f"SCREEN SHAKE: {'ON' if self._shake_enabled else 'OFF'}"
+        self._items[self._idx_shake].text = f"SCREEN SHAKE: {'ON' if self._shake_enabled else 'OFF'}"
         if self._on_toggle_shake:
             self._on_toggle_shake(self._shake_enabled)
     
     def _toggle_fullscreen(self) -> None:
         """Toggle fullscreen mode."""
         self._fullscreen_enabled = not self._fullscreen_enabled
-        self._items[7].text = f"FULLSCREEN: {'ON' if self._fullscreen_enabled else 'OFF'}"
+        self._items[self._idx_fullscreen].text = f"FULLSCREEN: {'ON' if self._fullscreen_enabled else 'OFF'}"
         if self._on_toggle_fullscreen:
             self._on_toggle_fullscreen(self._fullscreen_enabled)
     
@@ -1398,17 +1405,19 @@ class SettingsMenu(Menu):
             self._items[1].slider_value = sfx
         if len(self._items) > 2:
             self._items[2].slider_value = music
-        if len(self._items) > 3:
+        
+        # Update toggle buttons using indices
+        if len(self._items) > self._idx_theme:
             display_name = _format_theme_name(palette)
-            self._items[3].text = f"THEME: {display_name}"
-        if len(self._items) > 4:
-            self._items[4].text = f"GHOST PIECE: {'ON' if ghost else 'OFF'}"
-        if len(self._items) > 5:
-            self._items[5].text = f"PARTICLES: {'ON' if particles else 'OFF'}"
-        if len(self._items) > 6:
-            self._items[6].text = f"SCREEN SHAKE: {'ON' if shake else 'OFF'}"
-        if len(self._items) > 7:
-            self._items[7].text = f"FULLSCREEN: {'ON' if fullscreen else 'OFF'}"
+            self._items[self._idx_theme].text = f"THEME: {display_name}"
+        if len(self._items) > self._idx_ghost:
+            self._items[self._idx_ghost].text = f"GHOST PIECE: {'ON' if ghost else 'OFF'}"
+        if len(self._items) > self._idx_particles:
+            self._items[self._idx_particles].text = f"PARTICLES: {'ON' if particles else 'OFF'}"
+        if len(self._items) > self._idx_shake:
+            self._items[self._idx_shake].text = f"SCREEN SHAKE: {'ON' if shake else 'OFF'}"
+        if len(self._items) > self._idx_fullscreen:
+            self._items[self._idx_fullscreen].text = f"FULLSCREEN: {'ON' if fullscreen else 'OFF'}"
     
     def draw(self) -> None:
         """Draw settings menu with two-column layout."""

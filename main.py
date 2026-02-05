@@ -67,6 +67,10 @@ from src.story.story_manager import StoryManager, DialogueLine, CHARACTERS
 FPS_GAMEPLAY = 60  # Full 60 FPS during gameplay
 FPS_MENU = 30      # 30 FPS for menus (sufficient for UI)
 
+# UI Constants
+DRAG_ZONE_HEIGHT = 40  # Height of draggable area at top of window
+ACCENT_COLOR_BLUE = (100, 180, 255)  # Modern blue accent color
+
 
 class TetrisApp:
     """
@@ -650,8 +654,8 @@ class TetrisApp:
         
         # Handle window dragging (borderless window) - works even during loading
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            # Check if clicking on top area (drag zone) - top 40 pixels
-            if event.pos[1] < 40 and self._window_dragging_supported:
+            # Check if clicking on top area (drag zone)
+            if event.pos[1] < DRAG_ZONE_HEIGHT and self._window_dragging_supported:
                 self._dragging_window = True
                 self._drag_offset = event.pos
                 return
@@ -941,7 +945,7 @@ class TetrisApp:
             self._screen.blit(icon, (avatar_x + (avatar_size - icon.get_width()) // 2, avatar_y + (avatar_size - icon.get_height()) // 2))
         
         # Draw accent frame - modern blue
-        pygame.draw.circle(self._screen, (100, 180, 255), (avatar_x + avatar_size // 2, avatar_y + avatar_size // 2), avatar_size // 2 + 3, 3)
+        pygame.draw.circle(self._screen, ACCENT_COLOR_BLUE, (avatar_x + avatar_size // 2, avatar_y + avatar_size // 2), avatar_size // 2 + 3, 3)
         
         # Draw player name next to avatar
         font = pygame.font.Font(None, 28)
@@ -986,7 +990,7 @@ class TetrisApp:
         pygame.draw.rect(self._screen, color, self._back_button_rect, border_radius=10)
         
         if is_hovered:
-            pygame.draw.rect(self._screen, (100, 180, 255), self._back_button_rect, 2, border_radius=10)
+            pygame.draw.rect(self._screen, ACCENT_COLOR_BLUE, self._back_button_rect, 2, border_radius=10)
         else:
             pygame.draw.rect(self._screen, (70, 65, 90), self._back_button_rect, 1, border_radius=10)
         

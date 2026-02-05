@@ -17,6 +17,10 @@ except ImportError:
     import pygame_ce as pygame
 
 
+# Typing animation speed (characters per second)
+DEFAULT_TYPING_SPEED = 35
+
+
 @dataclass
 class DialogueMessage:
     """A single dialogue message."""
@@ -127,7 +131,7 @@ class StoryPresentation:
         # Current dialogue state
         self._current_message: Optional[DialogueMessage] = None
         self._displayed_chars = 0
-        self._typing_speed = 35  # Characters per second
+        self._typing_speed = DEFAULT_TYPING_SPEED
         self._typing_timer = 0.0
         self._typing_complete = False
         
@@ -371,13 +375,16 @@ class StoryPresentation:
         # Emotion indicator (small text below portrait)
         emotion_font = pygame.font.Font(None, 18)
         emotion_text = f"[{emotion}]"
-        emotion_surf = emotion_font.render(emotion_text, True, (180, 180, 200, alpha))
+        emotion_surf = emotion_font.render(emotion_text, True, (180, 180, 200))
+        emotion_surf.set_alpha(alpha)
         emotion_x = port_x + (self._portrait_size - emotion_surf.get_width()) // 2
         emotion_y = port_y + self._portrait_size + 5
         self._screen.blit(emotion_surf, (emotion_x, emotion_y))
         
         # Portrait border
-        pygame.draw.rect(self._screen, (*style["border_color"], alpha), frame_rect, 3, border_radius=15)
+        border_surf = pygame.Surface((self._portrait_size + 6, self._portrait_size + 6), pygame.SRCALPHA)
+        pygame.draw.rect(border_surf, (*style["border_color"], alpha), border_surf.get_rect(), 3, border_radius=15)
+        self._screen.blit(border_surf, (port_x - 3, port_y - 3))
     
     def _draw_name(self, box_y: int, style: Dict) -> None:
         """Draw character name above dialog box."""
