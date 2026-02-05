@@ -1,0 +1,114 @@
+[
+  {
+    "a": "A",
+    "b": "B",
+    "bandwidth": 2048,
+    "latency": 0.1,
+    "reliability": 0.95,
+    "base_risk": 0.05
+  },
+  {
+    "a": "A",
+    "b": "C",
+    "bandwidth": 1536,
+    "latency": 0.15,
+    "reliability": 0.85,
+    "base_risk": 0.1
+  },
+  {
+    "a": "A",
+    "b": "H",
+    "bandwidth": 1024,
+    "latency": 0.18,
+    "reliability": 0.8,
+    "base_risk": 0.12
+  },
+  {
+    "a": "B",
+    "b": "C",
+    "bandwidth": 2048,
+    "latency": 0.12,
+    "reliability": 0.9,
+    "base_risk": 0.08
+  },
+  {
+    "a": "B",
+    "b": "D",
+    "bandwidth": 3072,
+    "latency": 0.08,
+    "reliability": 0.95,
+    "base_risk": 0.05
+  },
+  {
+    "a": "B",
+    "b": "G",
+    "bandwidth": 2560,
+    "latency": 0.1,
+    "reliability": 0.92,
+    "base_risk": 0.06
+  },
+  {
+    "a": "C",
+    "b": "E",
+    "bandwidth": 1024,
+    "latency": 0.2,
+    "reliability": 0.75,
+    "base_risk": 0.15
+  },
+  {
+    "a": "C",
+    "b": "H",
+    "bandwidth": 1280,
+    "latency": 0.16,
+    "reliability": 0.82,
+    "base_risk": 0.1
+  },
+  {
+    "a": "D",
+    "b": "E",
+    "bandwidth": 1536,
+    "latency": 0.15,
+    "reliability": 0.8,
+    "base_risk": 0.12
+  },
+  {
+    "a": "D",
+    "b": "F",
+    "bandwidth": 4096,
+    "latency": 0.05,
+    "reliability": 0.98,
+    "base_risk": 0.02
+  },
+  {
+    "a": "D",
+    "b": "G",
+    "bandwidth": 2048,
+    "latency": 0.12,
+    "reliability": 0.88,
+    "base_risk": 0.08
+  },
+  {
+    "a": "E",
+    "b": "F",
+    "bandwidth": 2048,
+    "latency": 0.1,
+    "reliability": 0.85,
+    "base_risk": 0.1
+  },
+  {
+    "a": "E",
+    "b": "H",
+    "bandwidth": 1024,
+    "latency": 0.22,
+    "reliability": 0.7,
+    "base_risk": 0.18
+  },
+  {
+    "a": "G",
+    "b": "F",
+    "bandwidth": 3072,
+    "latency": 0.15,
+    "reliability": 0.9,
+    "base_risk": 0.07
+  }
+]

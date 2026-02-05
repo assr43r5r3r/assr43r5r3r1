@@ -1,0 +1,156 @@
+{
+  "id": "act1",
+  "name": "Act I: Static",
+  "description": "The fractured network awakens. Learn the basics of message routing.",
+  
+  "initial_state": {
+    "player_tokens": 100,
+    "day": 1,
+    "factions": {
+      "Market": {"reputation": 0, "resources": 100},
+      "Militia": {"reputation": 0, "resources": 80},
+      "Archive": {"reputation": 10, "resources": 150}
+    }
+  },
+  
+  "objectives": [
+    {
+      "id": "obj_1",
+      "description": "Deliver 3 messages successfully",
+      "type": "deliver_count",
+      "target": 3,
+      "reward": 50
+    },
+    {
+      "id": "obj_2", 
+      "description": "Reach 20 reputation with any faction",
+      "type": "reputation",
+      "target": 20,
+      "reward": 75
+    }
+  ],
+  
+  "messages": [
+    {
+      "id": "ACT1_M001",
+      "origin": "A",
+      "dest": "B",
+      "tag": "trade",
+      "priority": 3,
+      "size": 1024,
+      "reward": 15,
+      "content_snippet": "Simple trade agreement between Harbor and Market.",
+      "spawn_day": 1,
+      "meta": {"tutorial": true}
+    },
+    {
+      "id": "ACT1_M002",
+      "origin": "B",
+      "dest": "D",
+      "tag": "med",
+      "priority": 6,
+      "size": 2048,
+      "reward": 25,
+      "content_snippet": "Medical supply requisition for the eastern settlements.",
+      "spawn_day": 1,
+      "meta": {}
+    },
+    {
+      "id": "ACT1_M003",
+      "origin": "H",
+      "dest": "A",
+      "tag": "personal",
+      "priority": 2,
+      "size": 512,
+      "reward": 10,
+      "content_snippet": "Letter from a farmer to family at the harbor.",
+      "spawn_day": 2,
+      "meta": {}
+    },
+    {
+      "id": "ACT1_M004",
+      "origin": "C",
+      "dest": "F",
+      "tag": "intel",
+      "priority": 7,
+      "size": 4096,
+      "reward": 40,
+      "content_snippet": "Scouting report from the western outpost. Archive requested this data.",
+      "spawn_day": 2,
+      "meta": {"faction_origin": "neutral", "faction_dest": "Archive"}
+    },
+    {
+      "id": "ACT1_M005",
+      "origin": "E",
+      "dest": "B",
+      "tag": "military",
+      "priority": 5,
+      "size": 3072,
+      "reward": 30,
+      "content_snippet": "Militia patrol schedule. Standard update to Market contacts.",
+      "spawn_day": 3,
+      "meta": {"faction_origin": "Militia", "faction_dest": "Market"}
+    }
+  ],
+  
+  "events": [
+    {
+      "id": "intro_event",
+      "trigger": {"type": "game_start"},
+      "dialogue": [
+        {
+          "speaker": "System",
+          "text": "The network flickers to life. Static fills the airwaves, but beneath it... signals. Messages waiting to be heard."
+        },
+        {
+          "speaker": "System",
+          "text": "You are the last operator. The fractured communities depend on you to route their messages through the noise."
+        },
+        {
+          "speaker": "System",
+          "text": "Choose wisely. Every message carries weight. Every path has risks."
+        }
+      ]
+    },
+    {
+      "id": "first_delivery",
+      "trigger": {"type": "message_delivered", "count": 1},
+      "dialogue": [
+        {
+          "speaker": "System",
+          "text": "Message delivered. The recipient's gratitude echoes through the network."
+        },
+        {
+          "speaker": "System", 
+          "text": "But be careful - not all eyes in this network are friendly. Some watch. Some listen. Some intercept."
+        }
+      ]
+    },
+    {
+      "id": "act1_complete",
+      "trigger": {"type": "objective_complete", "objective": "obj_1"},
+      "dialogue": [
+        {
+          "speaker": "System",
+          "text": "The static is clearing. Your reputation grows. The communities are beginning to trust the network again."
+        },
+        {
+          "speaker": "System",
+          "text": "But with clarity comes attention. New signals emerge... and new threats."
+        }
+      ],
+      "effects": {
+        "unlock_act2": true
+      }
+    }
+  ],
+  
+  "interceptors": [],
+  
+  "completion_conditions": {
+    "all_objectives": false,
+    "any_objective": true
+  },
+  
+  "next_scenario": "act2"
+}

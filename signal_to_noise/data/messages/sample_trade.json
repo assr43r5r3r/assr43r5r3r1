@@ -1,0 +1,13 @@
+{
+  "id": "M001",
+  "origin": "A",
+  "dest": "D",
+  "tag": "trade",
+  "priority": 5,
+  "size": 2048,
+  "reward": 20,
+  "content_snippet": "Trade manifest from Harbor Station. Medical supplies requested.",
+  "meta": {
+    "time_limit": 300
+  }
+}
