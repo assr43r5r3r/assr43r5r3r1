@@ -1,0 +1,14 @@
+{
+  "id": "M002",
+  "origin": "B",
+  "dest": "F",
+  "tag": "intel",
+  "priority": 7,
+  "size": 4096,
+  "reward": 45,
+  "content_snippet": "Intelligence report on eastern territories. Handle with care.",
+  "meta": {
+    "time_limit": 240,
+    "sensitive": true
+  }
+}

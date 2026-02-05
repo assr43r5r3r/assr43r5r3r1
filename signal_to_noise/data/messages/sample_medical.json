@@ -1,0 +1,14 @@
+{
+  "id": "M003",
+  "origin": "H",
+  "dest": "D",
+  "tag": "med",
+  "priority": 9,
+  "size": 1024,
+  "reward": 50,
+  "content_snippet": "URGENT: Outbreak reported at Farm Collective. Need immediate medical response.",
+  "meta": {
+    "time_limit": 180,
+    "urgent": true
+  }
+}

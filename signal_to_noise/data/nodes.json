@@ -1,0 +1,82 @@
+[
+  {
+    "id": "A",
+    "name": "Harbor Station",
+    "x": 150,
+    "y": 200,
+    "capacity": 10240,
+    "trust": 0.8,
+    "owner": null,
+    "type": "settlement"
+  },
+  {
+    "id": "B",
+    "name": "Central Market",
+    "x": 350,
+    "y": 150,
+    "capacity": 8192,
+    "trust": 0.7,
+    "owner": "Market",
+    "type": "hub"
+  },
+  {
+    "id": "C",
+    "name": "Western Outpost",
+    "x": 300,
+    "y": 350,
+    "capacity": 6144,
+    "trust": 0.6,
+    "owner": null,
+    "type": "relay"
+  },
+  {
+    "id": "D",
+    "name": "Medical Hub",
+    "x": 550,
+    "y": 200,
+    "capacity": 12288,
+    "trust": 0.9,
+    "owner": null,
+    "type": "settlement"
+  },
+  {
+    "id": "E",
+    "name": "Militia HQ",
+    "x": 500,
+    "y": 400,
+    "capacity": 8192,
+    "trust": 0.5,
+    "owner": "Militia",
+    "type": "hub"
+  },
+  {
+    "id": "F",
+    "name": "The Archive",
+    "x": 700,
+    "y": 300,
+    "capacity": 16384,
+    "trust": 0.95,
+    "owner": "Archive",
+    "type": "special"
+  },
+  {
+    "id": "G",
+    "name": "Northern Relay",
+    "x": 450,
+    "y": 80,
+    "capacity": 4096,
+    "trust": 0.65,
+    "owner": null,
+    "type": "relay"
+  },
+  {
+    "id": "H",
+    "name": "Farm Collective",
+    "x": 200,
+    "y": 450,
+    "capacity": 6144,
+    "trust": 0.75,
+    "owner": null,
+    "type": "settlement"
+  }
+]
