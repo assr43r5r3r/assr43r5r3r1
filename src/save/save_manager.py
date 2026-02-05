@@ -103,3 +103,21 @@ class SaveManager:
         profile = self._profile_manager.create_profile(name)
         self._profile_manager.set_current_profile(profile.id)
         return profile
+    
+    def save_all(self) -> None:
+        """
+        Save all data to disk.
+        
+        Called during cleanup to ensure no data is lost.
+        """
+        # ProfileManager saves automatically on changes, but we ensure it here
+        try:
+            self._profile_manager._save_profiles()
+        except Exception:
+            pass
+        
+        # Leaderboard also saves on changes
+        try:
+            self._leaderboard._save()
+        except Exception:
+            pass

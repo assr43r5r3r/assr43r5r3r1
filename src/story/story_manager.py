@@ -1,5 +1,7 @@
 """
 Story mode manager - expanded implementation with characters and plot.
+
+Features rich dialogue, character development, and graphic novel-style presentation.
 """
 
 from typing import List, Optional, Dict, Any
@@ -11,6 +13,8 @@ class StoryState(Enum):
     """Story mode states."""
     NOT_STARTED = auto()
     IN_PROGRESS = auto()
+    IN_DIALOGUE = auto()
+    IN_GAMEPLAY = auto()
     CHAPTER_COMPLETE = auto()
     STORY_COMPLETE = auto()
 
@@ -18,46 +22,67 @@ class StoryState(Enum):
 @dataclass
 class Character:
     """
-    Represents a story character.
+    Represents a story character with visual and dialogue properties.
     """
     id: str
     name: str
     title: str = ""
     description: str = ""
-    portrait: Optional[str] = None  # Path to portrait image
+    personality: str = ""
+    portrait_base: Optional[str] = None  # Base path for portrait images
     
     def get_dialogue_name(self) -> str:
         """Get name for dialogue display."""
         if self.title:
             return f"{self.name} - {self.title}"
         return self.name
+    
+    def get_portrait_path(self, emotion: str = "neutral") -> Optional[str]:
+        """Get portrait image path for a specific emotion."""
+        if not self.portrait_base:
+            return None
+        return f"{self.portrait_base}_{emotion}.png"
 
 
-# Main characters
+# Main characters with rich descriptions
 CHARACTERS = {
     "alex": Character(
         id="alex",
         name="Alex",
         title="The Shaper",
-        description="A young architect student who discovers the power to manipulate geometric patterns."
+        description="A young architect student who discovers the power to manipulate geometric patterns.",
+        personality="Curious and determined, initially reluctant about their powers. Grows into a confident leader.",
+        portrait_base="assets/portraits/alex"
     ),
     "elena": Character(
         id="elena",
         name="Dr. Elena Vex",
         title="Pattern Researcher",
-        description="A renowned physicist who has studied Pattern Shaping for decades."
+        description="A renowned physicist who has studied Pattern Shaping for decades.",
+        personality="Wise and patient, but harboring secrets about her past involvement with the Tetrominoes.",
+        portrait_base="assets/portraits/elena"
     ),
     "kai": Character(
         id="kai",
         name="Kai",
         title="Rival Shaper",
-        description="Another Shaper who works for a competing organization."
+        description="Another Shaper who works for a competing organization.",
+        personality="Confident and competitive, but ultimately good-hearted. Initially antagonistic but becomes an ally.",
+        portrait_base="assets/portraits/kai"
     ),
     "overseer": Character(
         id="overseer",
         name="The Overseer",
         title="Master of the Void",
-        description="A mysterious figure who controls the chaotic force behind the falling blocks."
+        description="A mysterious figure who controls the chaotic force behind the falling blocks.",
+        personality="Cold, calculating, speaks in cryptic patterns. Wants to plunge the world into geometric chaos.",
+        portrait_base="assets/portraits/overseer"
+    ),
+    "narrator": Character(
+        id="narrator",
+        name="",
+        title="",
+        description="Narrative voice for scene descriptions.",
     ),
 }
 

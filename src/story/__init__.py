@@ -1,16 +1,19 @@
 """
-Story mode package - placeholder for future implementation.
+Story mode package - graphic novel-style story presentation.
 
-The story mode will include:
+The story mode includes:
 - Multiple chapters with unique gameplay challenges
-- Narrative elements between stages
+- Narrative elements between stages with typing text animations
+- Character portraits with emotion expressions
+- Character-specific dialog box styles
 - Special game modes and modifiers
-- Boss battles with unique mechanics
 - Unlockable content and achievements
-
-For now, this is a basic structure that can be expanded later.
 """
 
-from .story_manager import StoryManager, StoryChapter, StoryState
+from .story_manager import StoryManager, StoryChapter, StoryState, DialogueLine, CHARACTERS
+from .story_presentation import StoryPresentation, DialogueMessage
 
-__all__ = ['StoryManager', 'StoryChapter', 'StoryState']
+__all__ = [
+    'StoryManager', 'StoryChapter', 'StoryState', 'DialogueLine', 'CHARACTERS',
+    'StoryPresentation', 'DialogueMessage'
+]

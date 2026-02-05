@@ -1187,7 +1187,14 @@ class MainMenu(Menu):
 
 
 class SettingsMenu(Menu):
-    """Settings menu with volume, visual options, and player management."""
+    """Settings menu with volume, visual options, and player management.
+    
+    Uses a two-column layout to prevent button overlap.
+    """
+    
+    BUTTON_WIDTH = 260
+    BUTTON_HEIGHT = 45
+    BUTTON_SPACING = 10
     
     def __init__(self, screen: pygame.Surface):
         super().__init__(screen, "OPTIONS")
@@ -1198,38 +1205,79 @@ class SettingsMenu(Menu):
         self._on_toggle_ghost: Optional[Callable[[bool], None]] = None
         self._on_toggle_particles: Optional[Callable[[bool], None]] = None
         self._on_toggle_shake: Optional[Callable[[bool], None]] = None
+        self._on_toggle_fullscreen: Optional[Callable[[bool], None]] = None
         self._on_leaderboard: Optional[Callable] = None
         self._on_add_player: Optional[Callable] = None
         
         self._master_volume = 0.8
         self._sfx_volume = 0.7
         self._music_volume = 0.5
-        self._current_palette = "anime"
+        self._current_palette = "classic"
         self._ghost_enabled = True
         self._particles_enabled = True
         self._shake_enabled = True
+        self._fullscreen_enabled = False
+        
+        # Two-column layout settings
+        self._column_width = 280
+        self._column_gap = 40
+        self._scroll_offset = 0
+        self._max_scroll = 0
         
         self._build_menu()
     
     def _build_menu(self) -> None:
-        """Build settings menu items."""
+        """Build settings menu items in organized groups."""
         self._items = [
+            # Column 1: Audio (items 0-2)
             MenuItem("Master", is_slider=True, slider_value=self._master_volume,
                     slider_callback=lambda v: self._set_volume("master", v)),
             MenuItem("SFX", is_slider=True, slider_value=self._sfx_volume,
                     slider_callback=lambda v: self._set_volume("sfx", v)),
             MenuItem("Music", is_slider=True, slider_value=self._music_volume,
                     slider_callback=lambda v: self._set_volume("music", v)),
-            MenuItem("THEME: Anime", action=self._cycle_palette),
+            # Column 1: Visual (items 3-6)
+            MenuItem("THEME: Classic", action=self._cycle_palette),
             MenuItem("GHOST PIECE: ON", action=self._toggle_ghost),
             MenuItem("PARTICLES: ON", action=self._toggle_particles),
             MenuItem("SCREEN SHAKE: ON", action=self._toggle_shake),
+            # Column 2: Window (items 7)
+            MenuItem("FULLSCREEN: OFF", action=self._toggle_fullscreen),
+            # Column 2: Player (items 8-9)
             MenuItem("LEADERBOARD", action=self._show_leaderboard),
             MenuItem("ADD PLAYER", action=self._add_player),
+            # Back button at bottom (item 10)
             MenuItem("BACK", action=self._go_back),
         ]
         for i in range(len(self._items)):
             self._hover_animations[i] = 0.0
+    
+    def _get_button_rect(self, index: int, width: int, height: int) -> pygame.Rect:
+        """Get button rect for two-column layout."""
+        # Calculate layout dimensions
+        total_content_width = self._column_width * 2 + self._column_gap
+        start_x = (width - total_content_width) // 2
+        start_y = 160  # Below title
+        
+        # Assign items to columns
+        # Column 1: 0-6 (Audio + Visual), Column 2: 7-9 (Window + Player)
+        # Back button spans bottom center
+        if index <= 6:  # Column 1 items
+            col = 0
+            row = index
+        elif index <= 9:  # Column 2 items
+            col = 1
+            row = index - 7
+        else:  # Back button (index 10)
+            # Center at bottom
+            btn_y = height - 80
+            return pygame.Rect((width - self.BUTTON_WIDTH) // 2, btn_y, 
+                             self.BUTTON_WIDTH, self.BUTTON_HEIGHT)
+        
+        x = start_x + col * (self._column_width + self._column_gap)
+        y = start_y + row * (self.BUTTON_HEIGHT + self.BUTTON_SPACING) - self._scroll_offset
+        
+        return pygame.Rect(x, y, self._column_width, self.BUTTON_HEIGHT)
     
     def _set_volume(self, volume_type: str, value: float) -> None:
         """Set a volume value."""
@@ -1284,6 +1332,13 @@ class SettingsMenu(Menu):
         if self._on_toggle_shake:
             self._on_toggle_shake(self._shake_enabled)
     
+    def _toggle_fullscreen(self) -> None:
+        """Toggle fullscreen mode."""
+        self._fullscreen_enabled = not self._fullscreen_enabled
+        self._items[7].text = f"FULLSCREEN: {'ON' if self._fullscreen_enabled else 'OFF'}"
+        if self._on_toggle_fullscreen:
+            self._on_toggle_fullscreen(self._fullscreen_enabled)
+    
     def _show_leaderboard(self) -> None:
         """Show leaderboard."""
         if self._on_leaderboard:
@@ -1307,6 +1362,7 @@ class SettingsMenu(Menu):
         on_toggle_ghost: Callable[[bool], None] = None,
         on_toggle_particles: Callable[[bool], None] = None,
         on_toggle_shake: Callable[[bool], None] = None,
+        on_toggle_fullscreen: Callable[[bool], None] = None,
         on_leaderboard: Callable = None,
         on_add_player: Callable = None
     ) -> None:
@@ -1318,11 +1374,13 @@ class SettingsMenu(Menu):
         self._on_toggle_ghost = on_toggle_ghost
         self._on_toggle_particles = on_toggle_particles
         self._on_toggle_shake = on_toggle_shake
+        self._on_toggle_fullscreen = on_toggle_fullscreen
         self._on_leaderboard = on_leaderboard
         self._on_add_player = on_add_player
     
     def set_values(self, master: float, sfx: float, music: float, palette: str,
-                   ghost: bool = True, particles: bool = True, shake: bool = True) -> None:
+                   ghost: bool = True, particles: bool = True, shake: bool = True,
+                   fullscreen: bool = False) -> None:
         """Set current values."""
         self._master_volume = master
         self._sfx_volume = sfx
@@ -1331,6 +1389,7 @@ class SettingsMenu(Menu):
         self._ghost_enabled = ghost
         self._particles_enabled = particles
         self._shake_enabled = shake
+        self._fullscreen_enabled = fullscreen
         
         # Update sliders
         if len(self._items) > 0:
@@ -1348,6 +1407,97 @@ class SettingsMenu(Menu):
             self._items[5].text = f"PARTICLES: {'ON' if particles else 'OFF'}"
         if len(self._items) > 6:
             self._items[6].text = f"SCREEN SHAKE: {'ON' if shake else 'OFF'}"
+        if len(self._items) > 7:
+            self._items[7].text = f"FULLSCREEN: {'ON' if fullscreen else 'OFF'}"
+    
+    def draw(self) -> None:
+        """Draw settings menu with two-column layout."""
+        width = self._screen.get_width()
+        height = self._screen.get_height()
+        
+        # Background
+        self._screen.fill(self._bg_color)
+        
+        # Subtle grid pattern
+        for i in range(0, width, 40):
+            for j in range(0, height, 40):
+                pygame.draw.rect(self._screen, (22, 22, 32), (i, j, 38, 38))
+        
+        # Title with glow
+        title_y = 60 + int(self._title_offset)
+        glow = self._font_title.render(self._title, True, self._accent_color)
+        glow.set_alpha(50)
+        for dx, dy in [(-2, 0), (2, 0), (0, -2), (0, 2)]:
+            self._screen.blit(glow, ((width - glow.get_width()) // 2 + dx, title_y + dy))
+        
+        title = self._font_title.render(self._title, True, self._title_color)
+        self._screen.blit(title, ((width - title.get_width()) // 2, title_y))
+        
+        # Column labels
+        label_font = pygame.font.Font(None, 24)
+        col_start_x = (width - (self._column_width * 2 + self._column_gap)) // 2
+        
+        # Audio/Visual label (Column 1)
+        label1 = label_font.render("AUDIO & VISUAL", True, (120, 140, 180))
+        self._screen.blit(label1, (col_start_x + 10, 130))
+        
+        # Window/Players label (Column 2)
+        label2 = label_font.render("WINDOW & PLAYERS", True, (120, 140, 180))
+        self._screen.blit(label2, (col_start_x + self._column_width + self._column_gap + 10, 130))
+        
+        # Build and draw buttons
+        self._button_rects.clear()
+        for i in range(len(self._items)):
+            rect = self._get_button_rect(i, width, height)
+            self._button_rects.append(rect)
+            
+            item = self._items[i]
+            anim = self._hover_animations.get(i, 0.0)
+            is_selected = i == self._selected_index
+            
+            if is_selected:
+                bg_color = tuple(int(self._button_normal[j] + (self._button_selected[j] - self._button_normal[j]) * anim) for j in range(3))
+                text_color = self._text_hover
+                border_color = self._accent_color
+            else:
+                bg_color = self._button_normal
+                text_color = self._text_normal
+                border_color = None
+            
+            self._draw_rounded_rect(self._screen, rect, bg_color, self.BUTTON_RADIUS,
+                                   border_color, glow=is_selected)
+            
+            if item.is_slider:
+                # Draw slider
+                label = self._font_item.render(item.text, True, text_color)
+                self._screen.blit(label, (rect.x + 15, rect.y + (rect.height - label.get_height()) // 2))
+                
+                slider_x = rect.x + 100
+                slider_y = rect.y + rect.height // 2 - 4
+                slider_width = rect.width - 160
+                slider_height = 8
+                
+                track = pygame.Rect(slider_x, slider_y, slider_width, slider_height)
+                pygame.draw.rect(self._screen, (30, 30, 40), track, border_radius=4)
+                
+                fill_width = int(slider_width * item.slider_value)
+                if fill_width > 0:
+                    fill = pygame.Rect(slider_x, slider_y, fill_width, slider_height)
+                    pygame.draw.rect(self._screen, self._accent_color, fill, border_radius=4)
+                
+                handle_x = max(slider_x, slider_x + fill_width - 6)
+                handle_x = min(handle_x, slider_x + slider_width - 12)
+                handle = pygame.Rect(handle_x, slider_y - 4, 12, 16)
+                pygame.draw.rect(self._screen, (220, 220, 230), handle, border_radius=4)
+                
+                value_text = f"{int(item.slider_value * 100)}%"
+                value_surf = self._font_hint.render(value_text, True, text_color)
+                self._screen.blit(value_surf, (rect.right - 45, rect.y + (rect.height - value_surf.get_height()) // 2))
+            else:
+                # Draw text centered
+                text = self._font_item.render(item.text, True, text_color)
+                self._screen.blit(text, (rect.x + (rect.width - text.get_width()) // 2,
+                                        rect.y + (rect.height - text.get_height()) // 2))
 
 
 class PauseMenu(Menu):

@@ -59,6 +59,13 @@ from src.ui.screens import NameEntryScreen, LeaderboardScreen
 from src.ui.loading import LoadingScreen
 from src.save.save_manager import SaveManager
 from src.util.events import EventBus, GameEvent
+from src.story.story_presentation import StoryPresentation, DialogueMessage
+from src.story.story_manager import StoryManager, DialogueLine, CHARACTERS
+
+
+# Frame rate constants for adaptive FPS
+FPS_GAMEPLAY = 60  # Full 60 FPS during gameplay
+FPS_MENU = 30      # 30 FPS for menus (sufficient for UI)
 
 
 class TetrisApp:
@@ -145,6 +152,13 @@ class TetrisApp:
         self._name_entry = NameEntryScreen(self._screen)
         self._leaderboard_screen = LeaderboardScreen(self._screen)
         
+        # Initialize story mode presentation
+        self._story_manager = StoryManager()
+        self._story_presentation = StoryPresentation(self._screen)
+        self._story_presentation.set_sound_callback(self._audio.play_sound)
+        self._in_story_mode = False
+        self._in_story_dialogue = False
+        
         # Set up sound callbacks
         for component in [
             self._main_menu, self._pause_menu, self._game_over_menu,
@@ -178,12 +192,22 @@ class TetrisApp:
         # Menu button rect for gameplay (initialized in draw)
         self._menu_button_rect = pygame.Rect(0, 0, 0, 0)
         
+        # Back button rect (top-left corner)
+        self._back_button_rect = pygame.Rect(20, 20, 40, 40)
+        
         # Add leaderboard button to main menu
         self._setup_main_menu_extras()
         
         # Event bus
         self._events = EventBus()
         self._setup_events()
+        
+        # Surface caching for performance optimization
+        self._cached_surfaces: dict = {}
+        self._cache_dirty = True
+        
+        # Current target FPS (adaptive)
+        self._current_fps = FPS_MENU
         
         # Update main menu with player info
         self._update_main_menu_player()
@@ -286,15 +310,55 @@ class TetrisApp:
             self._start_countdown()
     
     def _request_story_mode(self) -> None:
-        """Request to start story mode (placeholder - not fully implemented yet)."""
-        # Show a "Coming Soon" dialog
-        self._confirm_dialog.show(
-            "Story Mode",
-            "Coming Soon! Story mode is under development.",
-            on_confirm=lambda: None,
-            on_cancel=lambda: None
-        )
+        """Request to start story mode with graphic novel presentation."""
+        if not self._save_manager.current_player:
+            self._waiting_for_profile = True
+            self._name_entry.show(
+                on_confirm=self._on_profile_created_and_start_story,
+                on_cancel=lambda: setattr(self, '_waiting_for_profile', False)
+            )
+        else:
+            self._start_story_chapter(1)
+    
+    def _on_profile_created_and_start_story(self, name: str, avatar_path: Optional[str]) -> None:
+        """Handle profile creation and start story mode."""
+        self._on_profile_created(name, avatar_path)
+        self._start_story_chapter(1)
+    
+    def _start_story_chapter(self, chapter_id: int) -> None:
+        """Start a story mode chapter."""
+        chapter = self._story_manager.start_chapter(chapter_id)
+        if not chapter:
+            self._confirm_dialog.show(
+                "Story Mode",
+                "Chapter not found or not available yet.",
+                on_confirm=lambda: None,
+                on_cancel=lambda: None
+            )
+            return
+        
+        self._in_story_mode = True
+        
+        # Start intro dialogue if available
+        if chapter.intro_dialogue:
+            self._in_story_dialogue = True
+            dialogue_messages = [
+                DialogueMessage(line.character_id, line.text, line.emotion)
+                for line in chapter.intro_dialogue
+            ]
+            self._story_presentation.start_dialogue(
+                dialogue_messages,
+                on_complete=self._on_story_dialogue_complete
+            )
+        else:
+            self._start_countdown()
+        
         self._audio.play_sound("menu_select")
+    
+    def _on_story_dialogue_complete(self) -> None:
+        """Called when story dialogue finishes."""
+        self._in_story_dialogue = False
+        self._start_countdown()
     
     def _show_leaderboard(self) -> None:
         """Show the leaderboard screen."""
@@ -584,10 +648,10 @@ class TetrisApp:
             self._request_quit()
             return
         
-        # Handle window dragging (borderless window)
+        # Handle window dragging (borderless window) - works even during loading
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             # Check if clicking on top area (drag zone) - top 40 pixels
-            if event.pos[1] < 40 and not self._in_loading and self._window_dragging_supported:
+            if event.pos[1] < 40 and self._window_dragging_supported:
                 self._dragging_window = True
                 self._drag_offset = event.pos
                 return
@@ -602,8 +666,13 @@ class TetrisApp:
             pygame.display.set_window_position((new_x, new_y))
             return
         
-        # Handle loading screen - no skipping allowed
+        # Handle loading screen - no skipping allowed but continue processing window drag
         if self._in_loading:
+            return
+        
+        # Handle story dialogue
+        if self._in_story_dialogue and self._story_presentation.is_active:
+            self._story_presentation.handle_event(event)
             return
         
         # Handle confirm dialog first
@@ -616,13 +685,22 @@ class TetrisApp:
             self._name_entry.handle_event(event)
             return
         
-        # Handle leaderboard screen
+        # Handle leaderboard screen with back button
         if self._leaderboard_screen.is_active:
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if self._back_button_rect.collidepoint(event.pos):
+                    self._leaderboard_screen.close()
+                    self._audio.play_sound("menu_select")
+                    return
             self._leaderboard_screen.handle_event(event)
             return
         
-        # Handle settings menu first if open
+        # Handle settings menu first if open with back button
         if self._in_settings:
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if self._back_button_rect.collidepoint(event.pos):
+                    self._close_settings()
+                    return
             self._settings_menu.handle_event(event)
             return
         
@@ -658,6 +736,11 @@ class TetrisApp:
         # Update loading screen
         if self._in_loading:
             self._loading_screen.update(dt)
+            return
+        
+        # Update story dialogue
+        if self._in_story_dialogue and self._story_presentation.is_active:
+            self._story_presentation.update(dt)
             return
         
         # Update confirm dialog
@@ -725,6 +808,12 @@ class TetrisApp:
             self._loading_screen.draw()
             return
         
+        # Render story dialogue on top of background
+        if self._in_story_dialogue and self._story_presentation.is_active:
+            self._screen.fill((15, 15, 25))
+            self._story_presentation.draw()
+            return
+        
         # Render confirm dialog on top of everything
         if self._confirm_dialog.is_active:
             self._render_game_background()
@@ -736,12 +825,13 @@ class TetrisApp:
             self._name_entry.draw()
             return
         
-        # Render leaderboard screen
+        # Render leaderboard screen with back button
         if self._leaderboard_screen.is_active:
             self._leaderboard_screen.draw()
+            self._draw_back_button()
             return
         
-        # Render settings if open
+        # Render settings if open with back button
         if self._in_settings:
             if self._settings_return_state == GameState.PAUSED and self._game:
                 self._renderer.render(self._game)
@@ -749,6 +839,7 @@ class TetrisApp:
                 overlay.fill((10, 10, 20, 200))
                 self._screen.blit(overlay, (0, 0))
             self._settings_menu.draw()
+            self._draw_back_button()
             return
         
         # Render countdown
@@ -849,8 +940,8 @@ class TetrisApp:
             icon = font.render("?", True, (150, 140, 180))
             self._screen.blit(icon, (avatar_x + (avatar_size - icon.get_width()) // 2, avatar_y + (avatar_size - icon.get_height()) // 2))
         
-        # Draw accent frame - pink/manga colored
-        pygame.draw.circle(self._screen, (255, 150, 200), (avatar_x + avatar_size // 2, avatar_y + avatar_size // 2), avatar_size // 2 + 3, 3)
+        # Draw accent frame - modern blue
+        pygame.draw.circle(self._screen, (100, 180, 255), (avatar_x + avatar_size // 2, avatar_y + avatar_size // 2), avatar_size // 2 + 3, 3)
         
         # Draw player name next to avatar
         font = pygame.font.Font(None, 28)
@@ -882,37 +973,94 @@ class TetrisApp:
         text_y = btn_y + (btn_height - text.get_height()) // 2
         self._screen.blit(text, (text_x, text_y))
     
+    def _draw_back_button(self) -> None:
+        """Draw a back arrow button in the top-left corner."""
+        btn_size = 40
+        self._back_button_rect = pygame.Rect(20, 20, btn_size, btn_size)
+        
+        mouse_pos = pygame.mouse.get_pos()
+        is_hovered = self._back_button_rect.collidepoint(mouse_pos)
+        
+        # Draw button
+        color = (70, 65, 95) if is_hovered else (45, 42, 60)
+        pygame.draw.rect(self._screen, color, self._back_button_rect, border_radius=10)
+        
+        if is_hovered:
+            pygame.draw.rect(self._screen, (100, 180, 255), self._back_button_rect, 2, border_radius=10)
+        else:
+            pygame.draw.rect(self._screen, (70, 65, 90), self._back_button_rect, 1, border_radius=10)
+        
+        # Draw arrow icon
+        font = pygame.font.Font(None, 28)
+        arrow = font.render("←", True, (200, 195, 220) if not is_hovered else (255, 255, 255))
+        arrow_x = self._back_button_rect.x + (btn_size - arrow.get_width()) // 2
+        arrow_y = self._back_button_rect.y + (btn_size - arrow.get_height()) // 2
+        self._screen.blit(arrow, (arrow_x, arrow_y))
+    
+    def _get_target_fps(self) -> int:
+        """Get the target FPS based on current game state (adaptive frame rate)."""
+        # Full 60 FPS during gameplay
+        if self._state == GameState.PLAYING and not self._in_countdown:
+            return FPS_GAMEPLAY
+        
+        # 30 FPS for menus and other states (sufficient for UI)
+        return FPS_MENU
+    
     def run(self) -> None:
-        """Run the main game loop."""
+        """Run the main game loop with adaptive frame rate."""
         last_time = time.perf_counter()
         
-        while self._running:
-            # Calculate delta time
-            current_time = time.perf_counter()
-            dt = current_time - last_time
-            last_time = current_time
-            
-            # Cap delta time
-            if dt > 0.25:
-                dt = 0.25
-            
-            # Handle events
-            for event in pygame.event.get():
-                self._handle_event(event)
-            
-            # Update
-            self._update(dt)
-            
-            # Render
-            self._render()
-            
-            # Flip display
-            pygame.display.flip()
-            
-            # Cap frame rate
-            self._clock.tick(FPS)
+        try:
+            while self._running:
+                # Calculate delta time
+                current_time = time.perf_counter()
+                dt = current_time - last_time
+                last_time = current_time
+                
+                # Cap delta time to prevent spiral of death
+                if dt > 0.25:
+                    dt = 0.25
+                
+                # Handle events
+                for event in pygame.event.get():
+                    self._handle_event(event)
+                
+                # Update
+                self._update(dt)
+                
+                # Render
+                self._render()
+                
+                # Flip display
+                pygame.display.flip()
+                
+                # Adaptive frame rate - reduce CPU usage when not actively playing
+                target_fps = self._get_target_fps()
+                self._clock.tick(target_fps)
         
-        # Cleanup
+        finally:
+            # Always cleanup properly (ensure resources are freed)
+            self._cleanup()
+    
+    def _cleanup(self) -> None:
+        """Clean up resources properly on exit."""
+        # Stop audio
+        try:
+            pygame.mixer.stop()
+            pygame.mixer.quit()
+        except Exception:
+            pass
+        
+        # Save any pending data
+        try:
+            self._save_manager.save_all()
+        except Exception:
+            pass
+        
+        # Clear cached surfaces
+        self._cached_surfaces.clear()
+        
+        # Quit pygame
         pygame.quit()
 
 
